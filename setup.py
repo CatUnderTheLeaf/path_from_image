@@ -14,7 +14,8 @@ setup(
     install_requires=[
         'setuptools',
         'numpy',
-        'sympy'
+        'sympy',
+        'cv2'
     ],
     zip_safe=True,
     maintainer='Stacy',
@@ -24,7 +25,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'image_warper = path_from_image.image_warper:main'
+            'image_warper = path_from_image.image_warper:main',
+            'lane_area_drawer = path_from_image.lane_area_drawer:main'
         ],
     },
 )
