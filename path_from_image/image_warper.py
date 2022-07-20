@@ -55,20 +55,25 @@ class ImageWarper(Node):
         self.bridge = CvBridge()
 
         # Publishers and subscribers
+        # Get topic names from ROS params
+        self.declare_parameter('image_raw', '/vehicle/front_camera/image_raw')
+        self.declare_parameter('wrap_img', '/wrap_img')
+        self.declare_parameter('camera_info', '/vehicle/front_camera/camera_info')
+
         self.camera_sub = self.create_subscription(
             Image,
-            '/vehicle/front_camera/image_raw',
+            self.get_parameter('image_raw').get_parameter_value().string_value,
             self.camera_callback,
             10)
         self.camera_sub
         self.img_pub = self.create_publisher(
             Image,
-            '/wrap_img',
+            self.get_parameter('wrap_img').get_parameter_value().string_value,
             10)
         self.img_pub
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
-            '/vehicle/front_camera/camera_info',
+            self.get_parameter('camera_info').get_parameter_value().string_value,
             self.info_callback,
             1)
         self.camera_info_sub
