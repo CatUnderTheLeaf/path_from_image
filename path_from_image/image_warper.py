@@ -28,25 +28,29 @@ class ImageWarper(Node):
         # Call on_timer function every second
         self._output_timer = self.create_timer(1.0, self.on_timer)
         self._tf_future = None
-        # TODO get from params
-        self._camera_frame = 'camera_link_optical'
-        self._base_frame = 'chassis'
         self._when = None
 
+        # get frame names from ROS params
+        self.declare_parameter('_camera_frame', 'camera_link_optical')
+        self.declare_parameter('_base_frame', 'chassis')
+        self._camera_frame = self.get_parameter('_camera_frame').get_parameter_value().string_value
+        self._base_frame = self.get_parameter('_base_frame').get_parameter_value().string_value
+        
         # Camera stuff
         self.cameraInfoSet = False
         self.camera_model = PinholeCameraModel()
         # transformation matrix for 
         # (un)wraping images to top-view projection
         self.transformMatrix = None
-        # scale factors, meters per image height/width
+        # scale factors, image height/width per meters
         self.x_scale = None
         self.y_scale = None
-        # TODO 
-        # get these 2 parameters from params server
-        # eg. distance_ahead = rospy.get_param('~distance_ahead')
-        self.distance_ahead = 10.0
-        self.lane_width = 10.0
+        
+        # get these 2 parameters from ROS params
+        self.declare_parameter('distance_ahead', 10.0)
+        self.declare_parameter('lane_width', 10.0)
+        self.distance_ahead = self.get_parameter('distance_ahead').get_parameter_value().double_value
+        self.lane_width = self.get_parameter('lane_width').get_parameter_value().double_value
         
         self.bridge = CvBridge()
 
@@ -205,9 +209,9 @@ class ImageWarper(Node):
             lbc_point = self.transformPoint(lbc_ray, fromCamera=True)
             rbc_point = self.transformPoint(rbc_ray, fromCamera=True)            
             point3, point4, x_scale = self.getUpperPoints(zero, lbc_point, rbc_point)   
-            # set scale factors in meters/pixel
-            self.x_scale = x_scale/w
-            self.y_scale = self.distance_ahead/h
+            # set scale factors in pixel/meters
+            self.x_scale = w/self.lane_width
+            self.y_scale = h/self.distance_ahead
             # transform points 3 and 4 to camera_optical_link frame
             luc_point = self.transformPoint(point3, fromCamera=False)
             ruc_point = self.transformPoint(point4, fromCamera=False)
@@ -290,9 +294,6 @@ class ImageWarper(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    # TODO get params
-    # camera_link_optical = rospy.get_param('~camera_opt_frame')
-    # base_bottom_link = rospy.get_param('~base_frame')
     image_warper = ImageWarper()
 
     rclpy.spin(image_warper)
