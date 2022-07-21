@@ -74,21 +74,11 @@ class LaneAreaDrawer(Node):
         Returns:
             np.array: image with lane area drawn on it
         """        
-        # get the tresholded image
         binary = self.treshold_binary(cv_image)
-        left_fit, right_fit, img_with_windows = self.fit_polynomial(binary)
-        draw_img = self.draw_filled_polygon(cv_image, left_fit, right_fit)
-        # draw_img = draw_polylines(out_img, left_fit, right_fit)
-        # draw_img = draw_filled_polygon(out_img, left_fit, right_fit)
-        # get the perspective transform matrix
-        # self.transformMatrix = self.getPerspectiveTransformMatrix(cv_image)
-        # get the scale factors
-        # self.x_scale, self.y_scale = self.getScaleFactors(cv_image)
-        # get the lane area
-        # lane_area = self.getLaneArea(binary)
-        # draw the lane area
-        # lane_area_img = self.drawLaneAreaOnImage(cv_image, lane_area)
-        lane_area_img = draw_img
+        left_fit, right_fit, out_img = self.fit_polynomial(binary)
+        draw_img = self.draw_filled_polygon(out_img, left_fit, right_fit)
+        lane_area_img = cv2.addWeighted(cv_image,  0.8, draw_img,  0.7, 0)
+        
         return lane_area_img
 
     # draw a green polygon between two lanes
@@ -116,24 +106,23 @@ class LaneAreaDrawer(Node):
             
         return ploty, left_fitx, right_fitx
 
-    def fit_polynomial(self, treshold_warped):
+    def fit_polynomial(self, treshold_warped, ym_per_pix=1, xm_per_pix=1):
         """return polynomial for both lanes
 
         Args:
             treshold_warped (CVimage): tresholded binary image
+            ym_per_pix (int, optional): meters per pixel in y dimension. Defaults to 1.
+            xm_per_pix (int, optional): meters per pixel in x dimension. Defaults to 1.
 
         Returns:
             tuple: polynomials for right and left lane
         """        
-        h, w = treshold_warped.shape[0], treshold_warped.shape[1]
-        # ym_per_pix, xm_per_pix - meters per pixel in x or y dimension
-        ym_per_pix=10.0/h
-        xm_per_pix=10.0/w
+        
         left_fit = [0,0,0]
         right_fit = [0,0,0]
             
         # Find our lane pixels first
-        leftx, lefty, rightx, righty, out_img = self.find_lane_pixels(treshold_warped, True)
+        leftx, lefty, rightx, righty, out_img = self.find_lane_pixels(treshold_warped)
         
         # check if the image is not empty
         if (leftx.size > 0 and lefty.size > 0 and rightx.size > 0 and righty.size > 0):
@@ -160,10 +149,10 @@ class LaneAreaDrawer(Node):
         # Set minimum number of pixels found to recenter window
         minpix = 200
 
-        treshold_warped = image[:,:,0]
-        out_img = np.copy(image)
         # Take a histogram of the bottom half of the image
-        histogram = np.sum(treshold_warped[treshold_warped.shape[0]//2:,:], axis=0)
+        histogram = np.sum(image[image.shape[0]//2:,:], axis=0)
+        # Create an output image to draw on and visualize the result
+        out_img = np.dstack((image, image, image))
         from scipy.signal import find_peaks
         peaks, _ = find_peaks(histogram, distance=300)
         # if the image is empty
@@ -179,9 +168,9 @@ class LaneAreaDrawer(Node):
             rightx_base = peaks[-1]
 
             # Set height of windows - based on nwindows above and image shape
-            window_height = np.int64(treshold_warped.shape[0]//nwindows)
+            window_height = np.int64(image.shape[0]//nwindows)
             # Identify the x and y positions of all nonzero pixels in the image
-            nonzero = treshold_warped.nonzero()
+            nonzero = image.nonzero()
             nonzeroy = np.array(nonzero[0])
             nonzerox = np.array(nonzero[1])
             # Current positions to be updated later for each window in nwindows
@@ -195,8 +184,8 @@ class LaneAreaDrawer(Node):
             # Step through the windows one by one
             for window in range(nwindows):
                 # Identify window boundaries in x and y (and right and left)
-                win_y_low = treshold_warped.shape[0] - (window+1)*window_height
-                win_y_high = treshold_warped.shape[0] - window*window_height
+                win_y_low = image.shape[0] - (window+1)*window_height
+                win_y_high = image.shape[0] - window*window_height
                 
                 # Find the four below boundaries of the window 
                 win_xleft_low = leftx_current - margin 
@@ -247,7 +236,7 @@ class LaneAreaDrawer(Node):
             rightx = nonzerox[right_lane_inds]
             righty = nonzeroy[right_lane_inds]
 
-            out_img[lefty, leftx] = [0, 255, 0]
+            out_img[lefty, leftx] = [0, 0, 255]
             out_img[righty, rightx] = [255, 0, 0]
 
         return leftx, lefty, rightx, righty, out_img 
@@ -287,11 +276,8 @@ class LaneAreaDrawer(Node):
         # Combine the two binary thresholds
         combined_binary = np.zeros_like(sxbinary)
         combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
-
-        binary = np.dstack((combined_binary, combined_binary, combined_binary)) * 255
-        self.treshold_image = binary
-
-        return binary
+        
+        return combined_binary
 
 
 
