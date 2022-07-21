@@ -26,7 +26,8 @@ setup(
     entry_points={
         'console_scripts': [
             'image_warper = path_from_image.image_warper:main',
-            'lane_area_drawer = path_from_image.lane_area_drawer:main'
+            'lane_area_drawer = path_from_image.lane_area_drawer:main',
+            'trans_matrix_getter = path_from_image.trans_matrix_getter:main'
         ],
     },
 )
