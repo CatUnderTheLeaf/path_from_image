@@ -89,7 +89,8 @@ image_warper = Node(
     parameters=[
         {'image_raw': '/vehicle/front_camera/image_raw', # camera image topic name
         'wrap_img': '/path/warp_image', # wraped image topic name
-        'transf_matrix': '/path/transf_matrix'} # Transformation matrices topic name
+        'transf_matrix': '/path/transf_matrix', # Transformation matrices topic name
+        'img_waypoints': '/path/img_waypoints'} # waypoints in the image frame
     ]
 )
 ```
