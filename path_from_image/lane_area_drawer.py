@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
+from geometry_msgs.msg import Point32, Polygon
 
 from custom_msgs.msg import TransformationMatrices
 
@@ -25,6 +26,7 @@ class LaneAreaDrawer(Node):
         self.declare_parameter('image_raw', '/vehicle/front_camera/image_raw')
         self.declare_parameter('lane_image', '/path/lane_image')
         self.declare_parameter('transf_matrix', '/path/transf_matrix')
+        self.declare_parameter('img_waypoints', '/path/img_waypoints')
 
         self.camera_sub = self.create_subscription(
             Image,
@@ -46,6 +48,12 @@ class LaneAreaDrawer(Node):
             10)
         self.matrix_sub
 
+        self.waypoint_pub = self.create_publisher(
+            Polygon,
+            self.get_parameter('img_waypoints').get_parameter_value().string_value,
+            10)
+        self.waypoint_pub
+
     def matrix_callback(self, msg):
         """ get transformation matrix from ROS message
         
@@ -60,6 +68,7 @@ class LaneAreaDrawer(Node):
 
     def camera_callback(self, msg):
         """ get picture and publish it with added lane area
+            also publish points of the middle lane line in the image
 
         Args:
             msg (Image): ros image message
@@ -68,10 +77,14 @@ class LaneAreaDrawer(Node):
             # self.get_logger().info('--------------I have already transform matrix and can transform image:')
             try:
                 cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-                lane_img = self.drawLaneArea(cv_image)
+                lane_img, img_waypoints = self.drawLaneArea(cv_image)
+                # make image message and publish it
                 # img type is 8UC4 not compatible with bgr8
                 lane_img_msg = self.bridge.cv2_to_imgmsg(lane_img, "bgr8")
                 self.img_pub.publish(lane_img_msg)
+                # make polygon message and publish it
+                img_waypoints_msg = self.make_polygon_msg(img_waypoints)
+                self.waypoint_pub.publish(img_waypoints_msg)
                     
             except CvBridgeError as e:
                 self.get_logger().info(e)
@@ -80,6 +93,7 @@ class LaneAreaDrawer(Node):
 
     def drawLaneArea(self, cv_image):
         """Draw lane area on top of the image
+            find points of the middle line of the lane
         
         Args:
             cv_image (OpenCV image): image to be drawn on
@@ -91,10 +105,13 @@ class LaneAreaDrawer(Node):
         binary = self.treshold_binary(warp_img)
         left_fit, right_fit, out_img = self.fit_polynomial(binary)
         draw_img = self.draw_filled_polygon(out_img, left_fit, right_fit)
+        waypoints, draw_img = self.get_middle_line(draw_img, left_fit, right_fit, draw=True)
+        unwarped_waypoints = cv2.perspectiveTransform(np.array([waypoints]), self.inverseMatrix)
+        
         unwarp_img = self.warp(draw_img, top_view=False)
         lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
         
-        return lane_area_img
+        return lane_area_img, unwarped_waypoints
 
     def warp(self, image, top_view=True):      
         """wrap image into top-view perspective
@@ -104,7 +121,7 @@ class LaneAreaDrawer(Node):
             top_view (bool, optional): warp into top-view perspective or vice versa. Defaults to True.
 
         Returns:
-            cv2_img: wraped image
+            cv2_img: warped image
         """        
         h, w = image.shape[0], image.shape[1]
         birds_image = image
@@ -118,10 +135,55 @@ class LaneAreaDrawer(Node):
             birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
         return birds_image
 
-    # draw a green polygon between two lanes
-    def draw_filled_polygon(self, img, left_fit, right_fit):
+    def make_polygon_msg(self, points):
+        """make polygon message from points
+        
+        Args:
+            points (list): list of points
+        
+        Returns:
+            Polygon: polygon message
+        """        
+        polygon = Polygon()
+        polygon.points = [Point32(x=p[0], y=p[1], z=0.0) for p in points[0]]
+        return polygon
+
+    def get_middle_line(self, img, left_fit, right_fit, draw=False):
+        """get middle line of the lane area
+
+        Args:
+            img (CVimage): image to be drawn on
+            left_fit (_type_): left lane line
+            right_fit (_type_): right lane line
+            draw (bool, optional): Draw markers on the image. Defaults to False.
+
+        Returns:
+            tuple: middle line and image with markers
+        """        
         draw_img = np.copy(img)
-        ploty, left_fitx, right_fitx = self.get_xy(draw_img.shape[0], left_fit, right_fit)
+        # get only 10 points, it is enough
+        ploty, left_fitx, right_fitx = self.get_xy(img.shape[0], 10, left_fit, right_fit)
+        middle_fitx = (left_fitx + right_fitx) / 2
+        middle_lane_points = np.asarray([middle_fitx, ploty]).T
+        if draw:
+            for point in middle_lane_points.astype(np.int64):
+                cv2.drawMarker(draw_img, (point[0], point[1]), (255, 255, 255), cv2.MARKER_CROSS, thickness=5)
+
+        return middle_lane_points, draw_img
+
+    def draw_filled_polygon(self, img, left_fit, right_fit):
+        """draw filled polygon on the image
+
+        Args:
+            img (CVimage): image to be drawn on
+            left_fit (_type_): left lane line
+            right_fit (_type_): right lane line
+
+        Returns:
+            CVimage: image with filled polygon
+        """        
+        draw_img = np.copy(img)
+        ploty, left_fitx, right_fitx = self.get_xy(draw_img.shape[0], draw_img.shape[0], left_fit, right_fit)
         
         all_x = np.concatenate([left_fitx, np.flip(right_fitx, 0)])
         all_y = np.concatenate([ploty, np.flip(ploty, 0)])
@@ -130,8 +192,18 @@ class LaneAreaDrawer(Node):
         
         return draw_img
 
-    def get_xy(self, shape_0, left_fit, right_fit):
-        ploty = np.linspace(0, shape_0-1, shape_0 )
+    def get_xy(self, shape_0, num_points, left_fit, right_fit):
+        """get x and y coordinates of the lane area
+
+        Args:
+            shape_0 (int): height of the image
+            left_fit (array): left lane line
+            right_fit (array): right lane line
+
+        Returns:
+            tuple: y coordinates and left and right x coordinates
+        """        
+        ploty = np.linspace(0, shape_0-1, num_points )
         try:
             left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
             right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]

@@ -11,6 +11,8 @@ inverse_matrix =np.array([
     [-4.96760242e-06, -4.42323786e-01,  4.02348598e+02],
     [-6.20950128e-09, -1.17423505e-03,  1.00000000e+00]])
 
+test_dir_path = '/home/catundertheleaf/robocar/robocar_ws/src/path_from_image/resource'
+
 def drawLaneArea(cv_image):
         """Draw lane area on top of the image
         
@@ -20,14 +22,31 @@ def drawLaneArea(cv_image):
         Returns:
             np.array: image with lane area drawn on it
         """        
+       
         # get the tresholded image
         warp_img = warp(cv_image)
         binary = treshold_binary(warp_img)
         left_fit, right_fit, out_img = fit_polynomial(binary)
         draw_img = draw_filled_polygon(out_img, left_fit, right_fit)
+        waypoints, draw_img = get_middle_line(draw_img, left_fit, right_fit, draw=True)
+
+        cv2.imwrite(os.path.join(test_dir_path, 'treshold_middle.jpg'), draw_img)
+
         unwarp_img = warp(draw_img, top_view=False)
-        lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
+        print(draw_img.shape)
+        print(waypoints)
+        unwarped_waypoints = cv2.perspectiveTransform( np.array([waypoints]), inverse_matrix)
+        print(unwarped_waypoints)
+        # for point in unwarped_waypoints[0].astype(np.int64):
+        #     cv2.drawMarker(unwarp_img, (point[0], point[1]), (255, 255, 255), cv2.MARKER_CROSS, thickness=5)
+        for p in unwarped_waypoints[0]:
+            print(p[0], p[1])
         
+        lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
+
+
+        cv2.imwrite(os.path.join(test_dir_path, 'lane_image_middle.jpg'), lane_area_img)
+
         return lane_area_img
 
 def warp(image, top_view=True):      
@@ -51,33 +70,31 @@ def warp(image, top_view=True):
         birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
     return birds_image
 
-# draw lines of polynomials
-def draw_polylines(img, left_fit, right_fit):
+def get_middle_line(img, left_fit, right_fit, draw=False):
     draw_img = np.copy(img)
-    # Generate x and y values for plotting        
-    ploty, left_fitx, right_fitx = get_xy(draw_img.shape[0], left_fit, right_fit)
+    ploty, left_fitx, right_fitx = get_xy(img.shape[0], 10, left_fit, right_fit)
+    middle_fitx = (left_fitx + right_fitx) / 2
+    middle_lane_points = np.asarray([middle_fitx, ploty]).T
+    if draw:
+        for point in middle_lane_points.astype(np.int64):
+            cv2.drawMarker(draw_img, (point[0], point[1]), (255, 255, 255), cv2.MARKER_CROSS, thickness=5)
 
-    draw_left_lane_points = (np.asarray([left_fitx, ploty]).T).astype(np.int32)   # needs to be int32 and transposed
-    cv2.polylines(draw_img, [draw_left_lane_points], False, (0,255,0), 20)  # args: image, points, closed, color
-    draw_right_lane_points = (np.asarray([right_fitx, ploty]).T).astype(np.int32)   # needs to be int32 and transposed
-    cv2.polylines(draw_img, [draw_right_lane_points], False, (0,255,0), 20)  # args: image, points, closed, color
-    
-    return draw_img
+    return middle_lane_points, draw_img
 
 # draw a green polygon between two lanes
 def draw_filled_polygon(img, left_fit, right_fit):
     draw_img = np.copy(img)
-    ploty, left_fitx, right_fitx = get_xy(draw_img.shape[0], left_fit, right_fit)
+    ploty, left_fitx, right_fitx = get_xy(draw_img.shape[0], draw_img.shape[0], left_fit, right_fit)
     
     all_x = np.concatenate([left_fitx, np.flip(right_fitx, 0)])
     all_y = np.concatenate([ploty, np.flip(ploty, 0)])
-    all_points = [(np.asarray([all_x, all_y]).T).astype(np.int32)]
+    all_points = [(np.asarray([all_x, all_y]).T).astype(np.int64)]
     cv2.fillPoly(draw_img, all_points, (0,255,0))
     
     return draw_img
 
-def get_xy(shape_0, left_fit, right_fit):
-    ploty = np.linspace(0, shape_0-1, shape_0 )
+def get_xy(shape_0, num_points, left_fit, right_fit):
+    ploty = np.linspace(0, shape_0-1, num_points)
     try:
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
@@ -270,12 +287,11 @@ def treshold_binary(image, s_thresh=(50, 255), sx_thresh=(20, 100)):
 
 
 
-
-test_dir_path = '/home/catundertheleaf/robocar/robocar_ws/src/path_from_image/resource'
-# cv_image = cv2.imread(os.path.join(test_dir_path, 'wraped_image.jpg'))
+# # cv_image = cv2.imread(os.path.join(test_dir_path, 'wraped_image.jpg'))
 cv_image = cv2.imread(os.path.join(test_dir_path, 'cv_image.jpg'))
-lane_img = drawLaneArea(cv_image)
-cv2.imwrite(os.path.join(test_dir_path, 'lane_image.jpg'), lane_img)
+# lane_img = drawLaneArea(cv_image)
+drawLaneArea(cv_image)
+# cv2.imwrite(os.path.join(test_dir_path, 'lane_image.jpg'), lane_img)
 
 
 # src = np.float32([[200, cv_image.shape[0]],[593, 450],[cv_image.shape[1]-590, 450],[cv_image.shape[1]-160, cv_image.shape[0]]])
@@ -284,7 +300,36 @@ cv2.imwrite(os.path.join(test_dir_path, 'lane_image.jpg'), lane_img)
 # Minv = cv2.getPerspectiveTransform(dst, src)
 
 
-# a = Minv.flatten()
-print(transform_matrix)
-print(inverse_matrix)
-# print(a.reshape(3,3))
+# image waypoints
+# points:
+# - x: 462.50994873046875
+#   y: 402.3473205566406
+#   z: 0.0
+# - x: 465.7264099121094
+#   y: 405.33319091796875
+#   z: 0.0
+# - x: 469.6453857421875
+#   y: 409.1055603027344
+#   z: 0.0
+# - x: 474.58648681640625
+#   y: 414.0223388671875
+#   z: 0.0
+# - x: 481.0980224609375
+#   y: 420.6974182128906
+#   z: 0.0
+# - x: 490.2058410644531
+#   y: 430.2793273925781
+#   z: 0.0
+# - x: 504.077880859375
+#   y: 445.1954040527344
+#   z: 0.0
+# - x: 528.2269287109375
+#   y: 471.6178283691406
+#   z: 0.0
+# - x: 582.0111083984375
+#   y: 531.2202758789062
+#   z: 0.0
+# - x: 815.4381713867188
+#   y: 791.9547119140625
+#   z: 0.0
+# ---
