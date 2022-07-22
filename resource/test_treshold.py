@@ -2,6 +2,15 @@ import os
 import cv2
 import numpy as np
 
+transform_matrix = np.array([
+                    [-1.21530281e-01, -1.06108400e+00,  4.47978917e+02],
+                    [-9.96030789e-06, -2.26076934e+00,  9.09619100e+02],
+                    [-1.24503849e-08, -2.65468183e-03,  1.00000000e+00]])
+inverse_matrix =np.array([
+    [ 5.60456644e-01, -4.66465832e-01,  1.73233692e+02],
+    [-4.96760242e-06, -4.42323786e-01,  4.02348598e+02],
+    [-6.20950128e-09, -1.17423505e-03,  1.00000000e+00]])
+
 def drawLaneArea(cv_image):
         """Draw lane area on top of the image
         
@@ -12,22 +21,35 @@ def drawLaneArea(cv_image):
             np.array: image with lane area drawn on it
         """        
         # get the tresholded image
-        binary = treshold_binary(cv_image)
+        warp_img = warp(cv_image)
+        binary = treshold_binary(warp_img)
         left_fit, right_fit, out_img = fit_polynomial(binary)
-        # draw_img = draw_filled_polygon(cv_image, left_fit, right_fit)
-        draw_img = draw_polylines(out_img, left_fit, right_fit)
-        # draw_img = draw_polylines(out_img, left_fit, right_fit)
-        # draw_img = draw_filled_polygon(out_img, left_fit, right_fit)
-        # get the perspective transform matrix
-        # self.transformMatrix = self.getPerspectiveTransformMatrix(cv_image)
-        # get the scale factors
-        # self.x_scale, self.y_scale = self.getScaleFactors(cv_image)
-        # get the lane area
-        # lane_area = self.getLaneArea(binary)
-        # draw the lane area
-        # lane_area_img = self.drawLaneAreaOnImage(cv_image, lane_area)
-        lane_area_img = draw_img
+        draw_img = draw_filled_polygon(out_img, left_fit, right_fit)
+        unwarp_img = warp(draw_img, top_view=False)
+        lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
+        
         return lane_area_img
+
+def warp(image, top_view=True):      
+    """wrap image into top-view perspective
+
+    Args:
+        image (cv2_img): image to transform
+        top_view (bool, optional): warp into top-view perspective or vice versa. Defaults to True.
+
+    Returns:
+        cv2_img: wraped image
+    """        
+    h, w = image.shape[0], image.shape[1]
+    birds_image = image
+    matrix = transform_matrix
+    if not top_view:
+        matrix = inverse_matrix
+    if (matrix is None):
+        return birds_image
+    else:
+        birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
+    return birds_image
 
 # draw lines of polynomials
 def draw_polylines(img, left_fit, right_fit):
@@ -76,15 +98,14 @@ def fit_polynomial(treshold_warped):
     Returns:
         tuple: polynomials for right and left lane
     """        
-    h, w = treshold_warped.shape[0], treshold_warped.shape[1]
     # ym_per_pix, xm_per_pix - meters per pixel in x or y dimension
-    ym_per_pix=10.0/h
-    xm_per_pix=10.0/w
+    ym_per_pix=1
+    xm_per_pix=1
     left_fit = [0,0,0]
     right_fit = [0,0,0]
         
     # Find our lane pixels first
-    leftx, lefty, rightx, righty, out_img = find_lane_pixels(treshold_warped, True)
+    leftx, lefty, rightx, righty, out_img = find_lane_pixels(treshold_warped)
     
     # check if the image is not empty
     if (leftx.size > 0 and lefty.size > 0 and rightx.size > 0 and righty.size > 0):
@@ -111,10 +132,14 @@ def find_lane_pixels(image, draw=False):
     # Set minimum number of pixels found to recenter window
     minpix = 200
 
-    treshold_warped = image[:,:,0]
-    out_img = np.copy(image)
-    # Take a histogram of the bottom half of the image
-    histogram = np.sum(treshold_warped[treshold_warped.shape[0]//2:,:], axis=0)
+    # treshold_warped = image[:,:,0]
+    # out_img = np.copy(image)
+    # # Take a histogram of the bottom half of the image
+    # histogram = np.sum(treshold_warped[treshold_warped.shape[0]//2:,:], axis=0)
+    histogram = np.sum(image[image.shape[0]//2:,:], axis=0)
+    # Create an output image to draw on and visualize the result
+    out_img = np.dstack((image, image, image))
+
     from scipy.signal import find_peaks
     peaks, _ = find_peaks(histogram, distance=300)
     # if the image is empty
@@ -130,9 +155,9 @@ def find_lane_pixels(image, draw=False):
         rightx_base = peaks[-1]
 
         # Set height of windows - based on nwindows above and image shape
-        window_height = np.int64(treshold_warped.shape[0]//nwindows)
+        window_height = np.int64(image.shape[0]//nwindows)
         # Identify the x and y positions of all nonzero pixels in the image
-        nonzero = treshold_warped.nonzero()
+        nonzero = image.nonzero()
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
         # Current positions to be updated later for each window in nwindows
@@ -146,8 +171,8 @@ def find_lane_pixels(image, draw=False):
         # Step through the windows one by one
         for window in range(nwindows):
             # Identify window boundaries in x and y (and right and left)
-            win_y_low = treshold_warped.shape[0] - (window+1)*window_height
-            win_y_high = treshold_warped.shape[0] - window*window_height
+            win_y_low = image.shape[0] - (window+1)*window_height
+            win_y_high = image.shape[0] - window*window_height
             
             # Find the four below boundaries of the window 
             win_xleft_low = leftx_current - margin 
@@ -198,7 +223,7 @@ def find_lane_pixels(image, draw=False):
         rightx = nonzerox[right_lane_inds]
         righty = nonzeroy[right_lane_inds]
 
-        out_img[lefty, leftx] = [0, 255, 0]
+        out_img[lefty, leftx] = [0, 0, 255]
         out_img[righty, rightx] = [255, 0, 0]
 
     return leftx, lefty, rightx, righty, out_img 
@@ -239,15 +264,27 @@ def treshold_binary(image, s_thresh=(50, 255), sx_thresh=(20, 100)):
     combined_binary = np.zeros_like(sxbinary)
     combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
 
-    binary = np.dstack((combined_binary, combined_binary, combined_binary)) * 255
-    
-    return binary
+    # binary = np.dstack((combined_binary, combined_binary, combined_binary)) * 255
+    return combined_binary
+    # return binary
 
 
 
 
 test_dir_path = '/home/catundertheleaf/robocar/robocar_ws/src/path_from_image/resource'
-cv_image = cv2.imread(os.path.join(test_dir_path, 'wraped_image.jpg'))
-# cv_image = cv2.imread(os.path.join(test_dir_patSh, 'cv_image.jpg'))
+# cv_image = cv2.imread(os.path.join(test_dir_path, 'wraped_image.jpg'))
+cv_image = cv2.imread(os.path.join(test_dir_path, 'cv_image.jpg'))
 lane_img = drawLaneArea(cv_image)
-cv2.imwrite(os.path.join(test_dir_path, 'treshold.jpg'), lane_img)
+cv2.imwrite(os.path.join(test_dir_path, 'lane_image.jpg'), lane_img)
+
+
+# src = np.float32([[200, cv_image.shape[0]],[593, 450],[cv_image.shape[1]-590, 450],[cv_image.shape[1]-160, cv_image.shape[0]]])
+# dst = np.float32([[300, cv_image.shape[0]],[300, 0],[cv_image.shape[1]-300, 0],[cv_image.shape[1]-300, cv_image.shape[0]]])
+# M = cv2.getPerspectiveTransform(src, dst)
+# Minv = cv2.getPerspectiveTransform(dst, src)
+
+
+# a = Minv.flatten()
+print(transform_matrix)
+print(inverse_matrix)
+# print(a.reshape(3,3))
