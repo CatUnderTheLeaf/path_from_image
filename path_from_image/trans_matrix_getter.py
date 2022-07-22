@@ -83,25 +83,22 @@ class TransMatrixGetter(Node):
                 self.set_transform_matrix()
             except LookupException:
                 self.get_logger().info('transform no longer available')
-            else:
-                self.get_logger().info('Got transform')
+            # else:
+            #     self.get_logger().info('Got transform')
 
     def on_timer(self):
         """ call and wait for tf-transformation to be ready
         """        
-        self.get_logger().info('on_timer function called')
+        # self.get_logger().info('on_timer function called')
         if self._tf_future:
-            self.get_logger().info('Still waiting for transform')
+            # self.get_logger().info('Still waiting for transform')
             return
-        # if (self.transformMatrix is not None) and (self.inverseMatrix is not None):
-        #     self.get_logger().info('transform matrix is set, no need to wait for transforms:')
-        # else:
         self._when = rclpy.time.Time()
         self._tf_future = self._tf_buffer.wait_for_transform_async(
             self._camera_frame, self._base_frame, self._when)
         self._tf_future.add_done_callback(self.on_tf_ready)
-        self.get_logger().info('Waiting for transform from {} to {}'.format(
-            self._base_frame, self._camera_frame))
+        # self.get_logger().info('Waiting for transform from {} to {}'.format(
+        #     self._base_frame, self._camera_frame))
 
     def info_callback(self, msg):   
         """ get camera info and load it to the camera model
@@ -110,7 +107,7 @@ class TransMatrixGetter(Node):
             msg (CameraInfo): ros camera info message
         """             
         if not self.cameraInfoSet:
-            self.get_logger().info('I heard first cameraInfo------------------')
+            # self.get_logger().info('I heard first cameraInfo------------------')
             self.camera_model.fromCameraInfo(msg)
             self.cameraInfoSet = True
 

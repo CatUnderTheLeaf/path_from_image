@@ -4,9 +4,9 @@ import cv2
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-
-
 from cv_bridge import CvBridge, CvBridgeError
+
+from custom_msgs.msg import TransformationMatrices
 
 class LaneAreaDrawer(Node):
 
@@ -16,43 +16,56 @@ class LaneAreaDrawer(Node):
         # transformation matrix for 
         # (un)wraping images to top-view projection
         self.transformMatrix = None
-        # scale factors, image height/width per meters
-        self.x_scale = None
-        self.y_scale = None
-        
-        # get these 2 parameters from ROS params
-        self.declare_parameter('distance_ahead', 10.0)
-        self.declare_parameter('lane_width', 10.0)
-        self.distance_ahead = self.get_parameter('distance_ahead').get_parameter_value().double_value
-        self.lane_width = self.get_parameter('lane_width').get_parameter_value().double_value
-        
+        self.inverseMatrix = None
+                   
         self.bridge = CvBridge()
 
         # Publishers and subscribers
         # Get topic names from ROS params
-        self.declare_parameter('wrap_img', '/wrap_img')
-        self.declare_parameter('lane_image', '/lane_image')       
+        self.declare_parameter('image_raw', '/vehicle/front_camera/image_raw')
+        self.declare_parameter('lane_image', '/path/lane_image')
+        self.declare_parameter('transf_matrix', '/path/transf_matrix')
 
         self.camera_sub = self.create_subscription(
             Image,
-            self.get_parameter('wrap_img').get_parameter_value().string_value,
+            self.get_parameter('image_raw').get_parameter_value().string_value,
             self.camera_callback,
             10)
         self.camera_sub
+        
         self.img_pub = self.create_publisher(
             Image,
             self.get_parameter('lane_image').get_parameter_value().string_value,
             10)
         self.img_pub
+        
+        self.matrix_sub = self.create_subscription(
+            TransformationMatrices,
+            self.get_parameter('transf_matrix').get_parameter_value().string_value,
+            self.matrix_callback,
+            10)
+        self.matrix_sub
+
+    def matrix_callback(self, msg):
+        """ get transformation matrix from ROS message
+        
+        Args:
+            msg (TransformationMatrices): ROS message with transformation matrix
+        """        
+        self.transformMatrix = msg.warp_matrix.reshape(3,3)
+        self.inverseMatrix = msg.inverse_matrix.reshape(3,3)
+        # self.get_logger().info('--------------I have transform matrix:')
+        # self.get_logger().info('--------------transform matrix: {}'.format(self.transformMatrix))
+        # self.get_logger().info('--------------inverse matrix: {}'.format(self.inverseMatrix))
 
     def camera_callback(self, msg):
-        """ get picture and publish its top-view perspective
+        """ get picture and publish it with added lane area
 
         Args:
             msg (Image): ros image message
         """        
         if self.transformMatrix is not None:
-            self.get_logger().info('--------------I have already transform matrix and can transform image:')
+            # self.get_logger().info('--------------I have already transform matrix and can transform image:')
             try:
                 cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
                 lane_img = self.drawLaneArea(cv_image)
@@ -74,12 +87,36 @@ class LaneAreaDrawer(Node):
         Returns:
             np.array: image with lane area drawn on it
         """        
-        binary = self.treshold_binary(cv_image)
+        warp_img = self.warp(cv_image)
+        binary = self.treshold_binary(warp_img)
         left_fit, right_fit, out_img = self.fit_polynomial(binary)
         draw_img = self.draw_filled_polygon(out_img, left_fit, right_fit)
-        lane_area_img = cv2.addWeighted(cv_image,  0.8, draw_img,  0.7, 0)
+        unwarp_img = self.warp(draw_img, top_view=False)
+        lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
         
         return lane_area_img
+
+    def warp(self, image, top_view=True):      
+        """wrap image into top-view perspective
+
+        Args:
+            image (cv2_img): image to transform
+            top_view (bool, optional): warp into top-view perspective or vice versa. Defaults to True.
+
+        Returns:
+            cv2_img: wraped image
+        """        
+        h, w = image.shape[0], image.shape[1]
+        birds_image = image
+        matrix = self.transformMatrix
+        if not top_view:
+            matrix = self.inverseMatrix
+        if (matrix is None):
+            self.get_logger().info("before warp call set_transform_matrix()")
+            return birds_image
+        else:
+            birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
+        return birds_image
 
     # draw a green polygon between two lanes
     def draw_filled_polygon(self, img, left_fit, right_fit):
