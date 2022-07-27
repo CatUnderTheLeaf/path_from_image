@@ -33,7 +33,7 @@ class PathPublisher(Node):
         # Camera stuff
         self.cameraInfoSet = False
         self.camera_model = PinholeCameraModel()
-            
+           
         # Publishers and subscribers
         # Get topic names from ROS params
         self.declare_parameter('img_waypoints', '/path/img_waypoints')
@@ -81,9 +81,11 @@ class PathPublisher(Node):
             self.get_logger().info('I can transform------------------')
             waypoints = []
             zero = self.transformPoint((0.,0.,0.))
+
             # transform waypoints from image frame to base frame
             for point in msg.points:
-                waypoints.append(self.getWaypoint(zero, self.transformPoint((point.x, point.y, point.z))))
+                ray = self.camera_model.projectPixelTo3dRay((point.x, point.y))
+                waypoints.append(self.getWaypoint(zero, self.transformPoint(ray)))
             
             # Create and publish path
             path = Path()
@@ -108,7 +110,7 @@ class PathPublisher(Node):
         line = Line3D(Point3D(zero), Point3D(transformed_point))
         
         # ground plane with lanes
-        xoy = (0.,0., transformed_point[2])
+        xoy = (0.,0., 0.)
         xy_plane = Plane(Point3D(xoy), normal_vector=(0, 0, 1))
         
         # the point in the robot/world frame
@@ -127,7 +129,7 @@ class PathPublisher(Node):
         waypoint.pose.orientation.w = q[3]
         waypoint.header.frame_id = self._base_frame
         waypoint.header.stamp = self.get_clock().now().to_msg()
-
+        # self.get_logger().info(f'new point {new_point[0]}, {new_point[1]}, {new_point[2]}')
         return waypoint
 
     def transformPoint(self, point):
@@ -142,10 +144,9 @@ class PathPublisher(Node):
         # only PointStamped, PoseStamped, PoseWithCovarianceStamped, Vector3Stamped, PointCloud2
         # can be transformed between frames
         p = PoseStamped()
-        x, y, z = point
-        p.pose.position.x = float(x)
-        p.pose.position.y = float(y)
-        p.pose.position.z = float(z)
+        p.pose.position.x = float(point[0])
+        p.pose.position.y = float(point[1])
+        p.pose.position.z = float(point[2])
         q = tf_transformations.quaternion_from_euler(0., 0., 0)
         p.pose.orientation.x = q[0]
         p.pose.orientation.y = q[1]
@@ -156,7 +157,9 @@ class PathPublisher(Node):
         
         # apply transformation to a pose between source_frame and dest_frame
         newPoint = self._tf_buffer.transform(p, self._base_frame)
-        pose = newPoint.pose.position        
+        pose = newPoint.pose.position    
+        # self.get_logger().info(f'old point {point[0]}, {point[1]}, {point[2]}')   
+        # self.get_logger().info(f'new point {pose.x}, {pose.y}, {pose.z}') 
         return pose.x, pose.y, pose.z
 
 def main(args=None):
