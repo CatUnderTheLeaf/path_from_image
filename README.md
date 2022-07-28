@@ -1,9 +1,9 @@
 # PathFromImage
-A ROS package, which gets real world lane coordinates with only image, camera calibration info, robot model and tf.
+A ROS package, which gets and publishes coordinates of the middle of the lane in the robot/car frame. It uses only image, camera calibration info, robot model and tf.
 
 ## Problem
 
-In most cases for lane following camera image is warped to a top-view perspective. Then goes a pipeline for detecting lane lines, drawing lane area, curvature calculation etc.
+In most cases for lane following task camera image is warped to a top-view perspective. Then goes a pipeline for detecting lane lines, drawing lane area, curvature calculation etc.
 
 For transformation `cv2.getPerspectiveTransform(src, dst)` is used, where `src` are coordinates of the vertices of the trapezoid and `dst` are coordinates of the corresponding points in the top-view image.
 <p align="center">
@@ -34,10 +34,11 @@ Why not to use geometry and find intersection of unit vectors and ground plane i
 
 ## Usage
 
-This package has 3 nodes:
+This package has 4 nodes:
 - `trans_matrix_getter` - calculates transformation matrix for perspective transform
 - `lane_area_drawer` - warps image using transformation matrix, finds lanes and draws lane area over a camera image
 - `image_warper` - just warps an image
+- `path_publisher` - publishes `nav_msgs.msg.Path` of the middle of the lane in the robot/car frame
 1. Install [`custom_msgs`](https://github.com/CatUnderTheLeaf/custom_msgs.git) in the same `src` directory.
 2. Static TF messages should be published, so there is a transformation between robot frame and camera optical frame
 > I use URDF robot model with `joint_state_publisher` and `robot_state_publisher`. 
@@ -81,6 +82,19 @@ trans_matrix_getter = Node(
     ]
 )
 
+path_publisher = Node(
+        package='path_from_image',
+        executable='path_publisher',
+        output='screen',
+        parameters=[
+            {'_camera_frame': 'camera_link_optical',
+            '_base_frame': 'chassis',
+            'img_waypoints': '/path/img_waypoints',
+            'path_waypoints': '/path/path_waypoints',
+            'camera_info': '/vehicle/front_camera/camera_info'}
+        ]
+    )
+
 # this node is used only when you need just to warp image
 image_warper = Node(
     package='path_from_image',
@@ -94,10 +108,22 @@ image_warper = Node(
     ]
 )
 ```
-5. Here is the result of these nodes. Black color indicates zone that is not seen by camera.
+5. Here is the result of these nodes. Camera image and its warped version. Black color indicates zone that is not seen by camera.
 <p align="center">
   <img src="resource/cv_image.jpg" width="350" title="image_raw">
   <img src="resource/wraped_image.jpg" width="350" title="wrap_img">
+</p>
+
+Lane area is discovered and warped back.
+
+<p align="center">
   <img src="resource/treshold.jpg" width="350" title="treshold_with_lane">
   <img src="resource/lane_image.jpg" width="350" title="lane_image">
+</p>
+
+Middle line can be drawn on the image or can be visualised in RVIZ with the help of [`marker_publisher`](https://github.com/CatUnderTheLeaf/rosRoboCar/blob/main/robocar_ws/src/rviz_markers/rviz_markers/marker_publisher.py) node. X-shaped figure is a robocar with 4 wheels. Green line is a middle line of the lane, a line which a car should follow.
+
+<p align="center">
+  <img src="resource/lane_image_middle.jpg" width="350" title="middle_line">
+  <img src="resource/rviz_img.jpg" width="450" title="rviz_img">
 </p>
