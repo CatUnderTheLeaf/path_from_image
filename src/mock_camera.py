@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import cv2
 import os
@@ -51,7 +52,7 @@ class MockCamera():
         try:
             test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
-            camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'img1.png'))
+            camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'img2.png'))
             # make image message and publish it
             # img type is 8UC4 not compatible with bgr8
             camera_img_msg = self.bridge.cv2_to_imgmsg(camera_img, "bgr8")

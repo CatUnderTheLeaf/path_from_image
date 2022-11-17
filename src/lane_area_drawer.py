@@ -1,19 +1,18 @@
+#!/usr/bin/env python3
+import sys
 import numpy as np
 import cv2
 
-import rclpy
-from rclpy.node import Node
+import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point32, Polygon
 
-from custom_msgs.msg import TransformationMatrices
+from path_from_image.msg import TransformationMatrices
 
-class LaneAreaDrawer(Node):
+class LaneAreaDrawer():
 
-    def __init__(self):
-        super().__init__('lane_area_drawer')      
-        
+    def __init__(self):        
         # transformation matrix for 
         # (un)wraping images to top-view projection
         self.transformMatrix = None
@@ -22,37 +21,31 @@ class LaneAreaDrawer(Node):
         self.bridge = CvBridge()
 
         # Publishers and subscribers
-        # Get topic names from ROS params
-        self.declare_parameter('image_raw', '/vehicle/front_camera/image_raw')
-        self.declare_parameter('lane_image', '/path/lane_image')
-        self.declare_parameter('transf_matrix', '/path/transf_matrix')
-        self.declare_parameter('img_waypoints', '/path/img_waypoints')
-
-        self.camera_sub = self.create_subscription(
+        # Get topic names from ROS params        
+        self.camera_sub = rospy.Subscriber(
+            rospy.get_param('~image_raw'),
             Image,
-            self.get_parameter('image_raw').get_parameter_value().string_value,
             self.camera_callback,
-            10)
-        self.camera_sub
+            queue_size=10)
         
-        self.img_pub = self.create_publisher(
+        self.img_pub = rospy.Publisher(
+            rospy.get_param('~lane_image'),
             Image,
-            self.get_parameter('lane_image').get_parameter_value().string_value,
-            10)
-        self.img_pub
+            queue_size=10)
         
-        self.matrix_sub = self.create_subscription(
+        self.matrix_sub = rospy.Subscriber(
+            rospy.get_param('~matrix_topic'),
             TransformationMatrices,
-            self.get_parameter('transf_matrix').get_parameter_value().string_value,
             self.matrix_callback,
-            10)
-        self.matrix_sub
-
-        self.waypoint_pub = self.create_publisher(
+            queue_size=10)
+        
+        self.waypoint_pub = rospy.Publisher(
+            rospy.get_param('~img_waypoints'),
             Polygon,
-            self.get_parameter('img_waypoints').get_parameter_value().string_value,
-            10)
-        self.waypoint_pub
+            queue_size=10)
+        
+        rospy.spin()
+        
 
     def matrix_callback(self, msg):
         """ get transformation matrix from ROS message
@@ -60,10 +53,11 @@ class LaneAreaDrawer(Node):
         Args:
             msg (TransformationMatrices): ROS message with transformation matrix
         """        
-        self.transformMatrix = msg.warp_matrix.reshape(3,3)
-        self.inverseMatrix = msg.inverse_matrix.reshape(3,3)
-        # self.get_logger().info('--------------I have transform matrix:')
-        # self.get_logger().info('--------------transform matrix: {}'.format(self.transformMatrix))
+        rospy.loginfo('--------------warp_matrix: {}'.format(msg.warp_matrix))
+        self.transformMatrix = np.array(msg.warp_matrix).reshape(3,3)
+        self.inverseMatrix = np.array(msg.inverse_matrix).reshape(3,3)
+        rospy.loginfo('--------------I have transform matrix:')
+        rospy.loginfo('--------------transform matrix: {}'.format(self.transformMatrix))
         # self.get_logger().info('--------------inverse matrix: {}'.format(self.inverseMatrix))
 
     def camera_callback(self, msg):
@@ -74,7 +68,7 @@ class LaneAreaDrawer(Node):
             msg (Image): ros image message
         """        
         if self.transformMatrix is not None:
-            # self.get_logger().info('--------------I have already transform matrix and can transform image:')
+            rospy.loginfo('--------------I have already transform matrix and can transform image:')
             try:
                 cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
                 lane_img, img_waypoints = self.drawLaneArea(cv_image)
@@ -87,9 +81,9 @@ class LaneAreaDrawer(Node):
                 self.waypoint_pub.publish(img_waypoints_msg)
                     
             except CvBridgeError as e:
-                self.get_logger().info(e)
+                rospy.loginfo(e)
         else:
-            self.get_logger().info('--------------There is no transform matrix:')
+            rospy.loginfo('--------------There is no transform matrix:')
 
     def drawLaneArea(self, cv_image):
         """Draw lane area on top of the image
@@ -129,7 +123,7 @@ class LaneAreaDrawer(Node):
         if not top_view:
             matrix = self.inverseMatrix
         if (matrix is None):
-            self.get_logger().info("before warp call set_transform_matrix()")
+            rospy.loginfo("before warp call set_transform_matrix()")
             return birds_image
         else:
             birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
@@ -389,17 +383,14 @@ class LaneAreaDrawer(Node):
         return combined_binary
 
 
+def main(args):
+    rospy.init_node('lane_area_drawer', anonymous=True, log_level=rospy.INFO)
+    node = LaneAreaDrawer()
 
-
-def main(args=None):
-    rclpy.init(args=args)
-    lane_area_drawer = LaneAreaDrawer()
-
-    rclpy.spin(lane_area_drawer)
-
-    lane_area_drawer.destroy_node()
-    rclpy.shutdown()
-
+    try:
+        print("running lane_area_drawer node")
+    except KeyboardInterrupt:
+        print("Shutting down ROS lane_area_drawer node")
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
