@@ -127,23 +127,35 @@ class TransMatrixGetter():
         """         
         rospy.loginfo('setting transform matrix------------------')      
         if not (self.camera_model):
-            self.get_logger().info("camera_model is not set")
+            rospy.loginfo("camera_model is not set")
             return
         else:
             h = self.camera_model.height
             w = self.camera_model.width
+            rospy.loginfo("image width={} and height={}".format(w, h))
             # left bottom corner        
             lbc_ray = self.camera_model.projectPixelTo3dRay((0, h))
             # right bottom corner        
             rbc_ray = self.camera_model.projectPixelTo3dRay((w, h))
+            rospy.loginfo("lbc_ray in camera frame (x, y, z) ({})".format(lbc_ray))         
+            rospy.loginfo("rbc_ray point in camera frame (x, y, z) ({})".format(rbc_ray))         
+            
             # camera center and bottom points in the robot/world frame
             zero = self.transformPoint((0.,0.,0.), fromCamera=True)
             lbc_point = self.transformPoint(lbc_ray, fromCamera=True)
-            rbc_point = self.transformPoint(rbc_ray, fromCamera=True)            
-            point3, point4, x_scale = self.getUpperPoints(zero, lbc_point, rbc_point)   
+            rbc_point = self.transformPoint(rbc_ray, fromCamera=True)   
+            rospy.loginfo("zero point in robot frame (x, y, z) ({})".format(zero))         
+            rospy.loginfo("lbc_point point in robot frame (x, y, z) ({})".format(lbc_point))         
+            rospy.loginfo("rbc_point point in robot frame (x, y, z) ({})".format(rbc_point))         
+            point3, point4, x_scale = self.getUpperPoints(zero, lbc_point, rbc_point)
+            rospy.loginfo("point3 point in robot frame (x, y, z) ({})".format(point3))         
+            rospy.loginfo("point4 point in robot frame (x, y, z) ({})".format(point4))         
+               
             # set scale factors in pixel/meters
             self.x_scale = w/self.lane_width
             self.y_scale = h/self.distance_ahead
+            rospy.loginfo("image x_scale={} and y_scale={}".format(self.x_scale, self.y_scale))
+            
             # transform points 3 and 4 to camera_optical_link frame
             luc_point = self.transformPoint(point3, fromCamera=False)
             ruc_point = self.transformPoint(point4, fromCamera=False)
@@ -159,6 +171,9 @@ class TransMatrixGetter():
             l_w = w/2*(1-x_scale/self.lane_width)
             r_w = w/2*(1+x_scale/self.lane_width)
             dst = [[l_w, 0],[r_w, 0],[r_w, h],[l_w, h]]
+            rospy.loginfo("src points = [[{}, {}], [{}, {}], [{}, {}], [0, {}]".format(luc[0], luc[1], ruc[0], ruc[1], w, h, h))
+            rospy.loginfo("src points = [[{}, 0], [{}, 0], [{}, {}], [0, {}]".format(l_w, r_w, r_w, h, l_w, h))
+            
             if (src and dst):
                 self.transformMatrix = self.get_transform_matrix(src, dst)
                 self.inverseMatrix = self.get_transform_matrix(dst, src)

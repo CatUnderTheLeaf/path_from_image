@@ -73,14 +73,14 @@ class LaneAreaDrawer():
                 np_arr = np.frombuffer(msg.data, np.uint8)
                 cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                 # cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-                # lane_img, img_waypoints = self.drawLaneArea(cv_image)
+                lane_img = self.drawLaneArea(cv_image) #, img_waypoints
                 # make image message and publish it
                 # img type is 8UC4 not compatible with bgr8
                 #### Create CompressedIamge ####
                 msg = CompressedImage()
                 msg.header.stamp = rospy.Time.now()
                 msg.format = "jpeg"
-                msg.data = np.array(cv2.imencode('.jpg', cv_image)[1]).tobytes()
+                msg.data = np.array(cv2.imencode('.jpg', lane_img)[1]).tobytes()
                 # rospy.loginfo('--------------img: {}'.format(msg.data))
                 # lane_img_msg = self.bridge.cv2_to_imgmsg(lane_img, "bgr8")
                 self.img_pub.publish(msg)
@@ -107,13 +107,14 @@ class LaneAreaDrawer():
         binary = self.treshold_binary(warp_img)
         left_fit, right_fit, out_img = self.fit_polynomial(binary)
         draw_img = self.draw_filled_polygon(out_img, left_fit, right_fit)
-        waypoints, draw_img = self.get_middle_line(draw_img, left_fit, right_fit, draw=True)
-        unwarped_waypoints = cv2.perspectiveTransform(np.array([waypoints]), self.inverseMatrix)
+        # waypoints, draw_img = self.get_middle_line(draw_img, left_fit, right_fit, draw=False)
+        # unwarped_waypoints = cv2.perspectiveTransform(np.array([waypoints]), self.inverseMatrix)
         
         unwarp_img = self.warp(draw_img, top_view=False)
-        lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
+        # lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
+        lane_area_img = cv2.addWeighted(warp_img,  0.8, draw_img,  0.7, 0)
         
-        return lane_area_img, unwarped_waypoints
+        return lane_area_img#, unwarped_waypoints
 
     def warp(self, image, top_view=True):      
         """wrap image into top-view perspective
@@ -242,7 +243,7 @@ class LaneAreaDrawer():
         
         return left_fit, right_fit, out_img
 
-    def find_lane_pixels(self, image, draw=False):
+    def find_lane_pixels(self, image, draw=True):
         """find lane pixels in image with sliding windows
 
         Args:
@@ -256,9 +257,9 @@ class LaneAreaDrawer():
         # Choose the number of sliding windows
         nwindows = 20
         # Set the width of the windows +/- margin
-        margin = 50
+        margin = 20
         # Set minimum number of pixels found to recenter window
-        minpix = 200
+        minpix = 100
 
         # Take a histogram of the bottom half of the image
         histogram = np.sum(image[image.shape[0]//2:,:], axis=0)
