@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 
 import rospy
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point32, Polygon
 
@@ -18,31 +18,31 @@ class LaneAreaDrawer():
         self.transformMatrix = None
         self.inverseMatrix = None
                    
-        self.bridge = CvBridge()
+        # self.bridge = CvBridge()
 
         # Publishers and subscribers
         # Get topic names from ROS params        
         self.camera_sub = rospy.Subscriber(
-            rospy.get_param('~image_raw'),
-            Image,
+            rospy.get_param('~image_topic'),
+            CompressedImage,
             self.camera_callback,
-            queue_size=10)
+            queue_size=1)
         
         self.img_pub = rospy.Publisher(
             rospy.get_param('~lane_image'),
-            Image,
-            queue_size=10)
+            CompressedImage,
+            queue_size=1)
         
         self.matrix_sub = rospy.Subscriber(
             rospy.get_param('~matrix_topic'),
             TransformationMatrices,
             self.matrix_callback,
-            queue_size=10)
+            queue_size=1)
         
         self.waypoint_pub = rospy.Publisher(
             rospy.get_param('~img_waypoints'),
             Polygon,
-            queue_size=10)
+            queue_size=1)
         
         rospy.spin()
         
@@ -70,15 +70,23 @@ class LaneAreaDrawer():
         if self.transformMatrix is not None:
             rospy.loginfo('--------------I have already transform matrix and can transform image:')
             try:
-                cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-                lane_img, img_waypoints = self.drawLaneArea(cv_image)
+                np_arr = np.frombuffer(msg.data, np.uint8)
+                cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                # cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+                # lane_img, img_waypoints = self.drawLaneArea(cv_image)
                 # make image message and publish it
                 # img type is 8UC4 not compatible with bgr8
-                lane_img_msg = self.bridge.cv2_to_imgmsg(lane_img, "bgr8")
-                self.img_pub.publish(lane_img_msg)
+                #### Create CompressedIamge ####
+                msg = CompressedImage()
+                msg.header.stamp = rospy.Time.now()
+                msg.format = "jpeg"
+                msg.data = np.array(cv2.imencode('.jpg', cv_image)[1]).tobytes()
+                # rospy.loginfo('--------------img: {}'.format(msg.data))
+                # lane_img_msg = self.bridge.cv2_to_imgmsg(lane_img, "bgr8")
+                self.img_pub.publish(msg)
                 # make polygon message and publish it
-                img_waypoints_msg = self.make_polygon_msg(img_waypoints)
-                self.waypoint_pub.publish(img_waypoints_msg)
+                # img_waypoints_msg = self.make_polygon_msg(img_waypoints)
+                # self.waypoint_pub.publish(img_waypoints_msg)
                     
             except CvBridgeError as e:
                 rospy.loginfo(e)
