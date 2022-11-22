@@ -5,7 +5,6 @@ import numpy as np
 import cv2
 from scipy.signal import find_peaks
         
-
 def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     """Draw lane area on top of the image
         find points of the middle line of the lane

@@ -2,7 +2,6 @@
 import sys
 import numpy as np
 import cv2
-from sympy import Point3D, Line3D, Plane
 
 import rospy
 from sensor_msgs.msg import CameraInfo
@@ -20,6 +19,7 @@ from tf.transformations import quaternion_from_euler
 from image_geometry import PinholeCameraModel
 
 from path_from_image.msg import TransformationMatrices
+from path_from_image import geometry_helper
 
 class TransMatrixGetter():
 
@@ -54,7 +54,7 @@ class TransMatrixGetter():
         self.matrix_pub = rospy.Publisher(
             rospy.get_param('~matrix_topic'),
             TransformationMatrices,
-            queue_size=10)
+            queue_size=1)
         
         self.camera_info_sub = rospy.Subscriber(
             rospy.get_param('~camera_info'),
@@ -64,14 +64,21 @@ class TransMatrixGetter():
 
         rate = rospy.Rate(10.0)
         while not rospy.is_shutdown():
-            if (self.cameraInfoSet and not self.matrixSet):
-                try:
-                    if self._tf_buffer.can_transform(self._camera_frame, self._base_frame, rospy.Time()):
-                        self.set_transform_matrix()
-                except (LookupException, ConnectivityException, ExtrapolationException):
-                    rate.sleep()
-                    continue
-                
+            if (self.cameraInfoSet):
+                if not self.matrixSet:
+                    try:
+                        if self._tf_buffer.can_transform(self._camera_frame, self._base_frame, rospy.Time()):
+                            self.set_transform_matrix()
+                    except (LookupException, ConnectivityException, ExtrapolationException):
+                        rate.sleep()
+                        continue
+                else:
+                    matrices = TransformationMatrices()
+                    matrices.warp_matrix = self.transformMatrix.flatten()
+                    matrices.inverse_matrix = self.inverseMatrix.flatten()
+                    self.matrix_pub.publish(matrices)
+                    rospy.logdebug('matrix is ready------------------')  
+                    rospy.logdebug('{}'.format(matrices.warp_matrix))  
                 rate.sleep()
 
     def info_callback(self, msg):   
@@ -81,7 +88,7 @@ class TransMatrixGetter():
             msg (CameraInfo): ros camera info message
         """             
         if not self.cameraInfoSet:
-            rospy.loginfo('I heard first cameraInfo------------------')
+            rospy.logdebug('I heard first cameraInfo------------------')
             self.camera_model.fromCameraInfo(msg)
             self.cameraInfoSet = True
       
@@ -125,9 +132,9 @@ class TransMatrixGetter():
         """find src and dst points for CV2 perspective transformation
             and set transformMatrix
         """         
-        rospy.loginfo('setting transform matrix------------------')      
+        rospy.logdebug('setting transform matrix------------------')      
         if not (self.camera_model):
-            rospy.loginfo("camera_model is not set")
+            rospy.logdebug("camera_model is not set")
             return
         else:
             h = self.camera_model.height
@@ -147,7 +154,7 @@ class TransMatrixGetter():
             rospy.logdebug("zero point in robot frame (x, y, z) ({})".format(zero))         
             rospy.logdebug("lbc_point point in robot frame (x, y, z) ({})".format(lbc_point))         
             rospy.logdebug("rbc_point point in robot frame (x, y, z) ({})".format(rbc_point))         
-            point3, point4, x_scale = self.getUpperPoints(zero, lbc_point, rbc_point)
+            point3, point4, x_scale = geometry_helper.getUpperPoints(zero, lbc_point, rbc_point, self.distance_ahead)
             rospy.logdebug("point3 point in robot frame (x, y, z) ({})".format(point3))         
             rospy.logdebug("point4 point in robot frame (x, y, z) ({})".format(point4))         
                
@@ -175,74 +182,11 @@ class TransMatrixGetter():
             rospy.logdebug("src points = [[{}, 0], [{}, 0], [{}, {}], [0, {}]".format(l_w, r_w, r_w, h, l_w, h))
             
             if (src and dst):
-                self.transformMatrix = self.get_transform_matrix(src, dst)
-                self.inverseMatrix = self.get_transform_matrix(dst, src)
-                matrices = TransformationMatrices()
-                matrices.warp_matrix = self.transformMatrix.flatten()
-                matrices.inverse_matrix = self.inverseMatrix.flatten()
-                self.matrix_pub.publish(matrices)
-                rospy.loginfo('matrix is ready------------------')  
-                rospy.logdebug('{}'.format(matrices.warp_matrix))  
+                self.transformMatrix = cv2.getPerspectiveTransform(np.float32(src), np.float32(dst))
+                self.inverseMatrix = cv2.getPerspectiveTransform(np.float32(dst), np.float32(src))             
                 self.matrixSet = True
             return    
-   
-    def get_transform_matrix(self, src, dst):
-        """get cv2 transform matrix for perspective transformation
 
-        Args:
-            src (list): list of 4 points in the source image
-            dst (list): list of 4 points in the destination image
-
-        Returns:
-            matrix: transformation matrix
-        """        
-        # get matrix for perspective transformation
-        transformMatrix = cv2.getPerspectiveTransform(np.float32(src), np.float32(dst))
-        return transformMatrix
-
-    def getUpperPoints(self, zero, lbc, rbc):
-        """ get upper src points in the robot/world frame
-
-        Args:
-            zero (tuple): camera center
-            lbc (tuple): ray which goes from center and left bottom corner of the image
-            rbc (tuple): ray which goes from center and right bottom corner of the image
-
-        Returns:
-            tuple: two upper points and x_scale factor
-        """        
-        # make two lines from camera center
-        lbc_line = Line3D(Point3D(zero), Point3D(lbc))
-        rbc_line = Line3D(Point3D(zero), Point3D(rbc))
-        
-        # ground plane with lanes
-        xoy = (0.,0., lbc[2])
-        xy_plane = Plane(Point3D(xoy), normal_vector=(0, 0, 1))
-        
-        # bottom points in the robot/world frame
-        # are intersection points of lines and ground plane
-        point1 = xy_plane.intersection(lbc_line)[0]
-        point2 = xy_plane.intersection(rbc_line)[0]
-
-        # distance in meters between bottom points
-        # after their projection onto the ground plane
-        x_scale = float(point1.distance(point2))
-
-        # get upper points in the robot/world frame
-        # sometimes in car models front camera 
-        # looks in the negative axe direction
-        # so our translation should has right sign
-        # TODO maybe has to be some way to determine 
-        # which axis goes along the car model and
-        # if it has the same direction as z-axis of the cv2-image
-        if lbc[1] > 0:
-            sign = 1
-        else:
-            sign = -1
-        point3 = point1.translate(sign*self.distance_ahead)
-        point4 = point2.translate(sign*self.distance_ahead)
-        
-        return point3, point4, x_scale
 
 def main(args):
     rospy.init_node('trans_matrix_getter', anonymous=True, log_level=rospy.INFO)

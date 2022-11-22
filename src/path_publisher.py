@@ -2,7 +2,6 @@
 import sys
 import numpy as np
 import cv2
-from sympy import Point3D, Line3D, Plane
 
 import rospy
 from sensor_msgs.msg import CameraInfo
@@ -17,6 +16,8 @@ from tf2_ros import LookupException, ConnectivityException, ExtrapolationExcepti
 from tf.transformations import quaternion_from_euler
 
 from image_geometry import PinholeCameraModel
+
+from path_from_image import geometry_helper
 
 class PathPublisher():
 
@@ -64,7 +65,7 @@ class PathPublisher():
             msg (CameraInfo): ros camera info message
         """             
         if not self.cameraInfoSet:
-            # rospy.loginfo('I heard first cameraInfo------------------')
+            rospy.logdebug('I heard first cameraInfo------------------')
             self.camera_model.fromCameraInfo(msg)
             self.cameraInfoSet = True
         if not self.canTransform:
@@ -72,7 +73,7 @@ class PathPublisher():
                 if self._tf_buffer.can_transform(self._camera_frame, self._base_frame, rospy.Time()):
                     self.canTransform = True
             except (LookupException, ConnectivityException, ExtrapolationException):
-                rospy.loginfo('I cannnot transform------------------')
+                rospy.logdebug('I cannnot transform------------------')
 
     def img_waypoints_callback(self, msg):
         """ get waypoints from image and publish them as path
@@ -80,9 +81,9 @@ class PathPublisher():
         Args:
             msg (Polygon): ros polygon message with waypoints
         """        
-        rospy.loginfo('img callback------------------')
+        rospy.logdebug('img callback------------------')
         if self.canTransform and self.cameraInfoSet:
-            rospy.loginfo('I can transform------------------')
+            rospy.logdebug('I can transform------------------')
             waypoints = []
             zero = self.transformPoint((0.,0.,0.))
 
@@ -110,22 +111,14 @@ class PathPublisher():
         Returns:
             PoseStamped: waypoint in the base frame
         """ 
-        # TODO: !!!!!!! very slow make smth else    
-        line = Line3D(Point3D(zero), Point3D(transformed_point))
-        
-        # ground plane with lanes
-        xoy = (0.,0., 0.)
-        xy_plane = Plane(Point3D(xoy), normal_vector=(0, 0, 1))
-        
         # the point in the robot/world frame
         # is an intersection point of a line and ground plane
-        new_point = xy_plane.intersection(line)[0]
-
+        x, y, z = geometry_helper.getLinePlaneIntersection(zero, transformed_point)
         # Form the PoseStamped
         waypoint = PoseStamped()
-        waypoint.pose.position.x = float(new_point[0])
-        waypoint.pose.position.y = float(new_point[1])
-        waypoint.pose.position.z = float(new_point[2])
+        waypoint.pose.position.x = x
+        waypoint.pose.position.y = y
+        waypoint.pose.position.z = z
         q = quaternion_from_euler(0., 0., 0)
         waypoint.pose.orientation.x = q[0]
         waypoint.pose.orientation.y = q[1]
@@ -133,7 +126,7 @@ class PathPublisher():
         waypoint.pose.orientation.w = q[3]
         waypoint.header.frame_id = self._base_frame
         waypoint.header.stamp = rospy.Time.now()
-        # rospy.loginfo(f'new point {new_point[0]}, {new_point[1]}, {new_point[2]}')
+        
         return waypoint
 
     def transformPoint(self, point):

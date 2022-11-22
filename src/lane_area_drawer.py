@@ -59,7 +59,7 @@ class LaneAreaDrawer():
             msg (CameraInfo): ros camera info message
         """             
         if not self.cameraInfo:
-            rospy.loginfo('load cameraInfo------------------')
+            rospy.logdebug('load cameraInfo------------------')
             self.cameraInfo = msg   
 
     def matrix_callback(self, msg):
@@ -71,7 +71,7 @@ class LaneAreaDrawer():
         rospy.logdebug('--------------warp_matrix: {}'.format(msg.warp_matrix))
         self.transformMatrix = np.array(msg.warp_matrix).reshape(3,3)
         self.inverseMatrix = np.array(msg.inverse_matrix).reshape(3,3)
-        rospy.loginfo('--------------I have transform matrix:')
+        rospy.logdebug('--------------I have transform matrix:')
         rospy.logdebug('--------------transform matrix: {}'.format(self.transformMatrix))
         rospy.logdebug('--------------inverse matrix: {}'.format(self.inverseMatrix))
 
@@ -101,9 +101,10 @@ class LaneAreaDrawer():
             # make polygon message and publish it
             img_waypoints_msg = self.make_polygon_msg(img_waypoints)
             self.waypoint_pub.publish(img_waypoints_msg)
+            rospy.logdebug('--------------publish waypoints:')
             
         else:
-            rospy.loginfo('--------------There is no transform matrix:')
+            rospy.logdebug('--------------There is no transform matrix:')
 
     def make_polygon_msg(self, points):
         """make polygon message from points
