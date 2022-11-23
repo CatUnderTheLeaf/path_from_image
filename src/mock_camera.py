@@ -6,7 +6,6 @@ import numpy as np
 
 import rospy
 from sensor_msgs.msg import CompressedImage, CameraInfo
-from cv_bridge import CvBridge, CvBridgeError
 
 class MockCamera():
 
@@ -29,7 +28,6 @@ class MockCamera():
         self.info.roi.width = 0
         self.info.roi.do_rectify = False
 
-        self.bridge = CvBridge()
 
         # Publishers
         # Get topic names from ROS params
@@ -50,23 +48,19 @@ class MockCamera():
             rate.sleep()
 
     def on_timer(self):
-        try:
-            test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
-            camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0000.jpg'))
-            # make image message and publish it
-            # img type is 8UC4 not compatible with bgr8
-            # camera_img_msg = self.bridge.cv2_to_imgmsg(camera_img, "bgr8")
-            # self.camera_pub.publish(camera_img_msg)
-            msg = CompressedImage()
-            msg.header.stamp = rospy.Time.now()
-            msg.format = "jpeg"
-            msg.data = np.array(cv2.imencode('.jpg', camera_img)[1]).tobytes()
-            self.camera_pub.publish(msg)
-            self.camera_info_pub.publish(self.info)
-                
-        except CvBridgeError as e:
-            self.get_logger().info(e)
+        
+        test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
+        camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0000.jpg'))
+        # make image message and publish it
+        # img type is 8UC4 not compatible with bgr8
+        msg = CompressedImage()
+        msg.header.stamp = rospy.Time.now()
+        msg.format = "jpeg"
+        msg.data = np.array(cv2.imencode('.jpg', camera_img)[1]).tobytes()
+        self.camera_pub.publish(msg)
+        self.camera_info_pub.publish(self.info)
+        
 
 def main(args):
     rospy.init_node('mock_camera_node', anonymous=True, log_level=rospy.INFO)

@@ -5,7 +5,6 @@ import cv2
 
 import rospy
 from sensor_msgs.msg import CompressedImage
-from cv_bridge import CvBridge, CvBridgeError
 
 from path_from_image.msg import TransformationMatrices
 
@@ -59,20 +58,18 @@ class ImageWarper():
         """        
         if self.transformMatrix is not None:
             # rospy.loginfo('--------------I have already transform matrix and can transform image:')
-            try:
-                np_arr = np.frombuffer(msg.data, np.uint8)
-                cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                warp_img = self.warp(cv_image)
-                # img type is 8UC4 not compatible with bgr8
-                #### Create CompressedIamge ####
-                msg = CompressedImage()
-                msg.header.stamp = rospy.Time.now()
-                msg.format = "jpeg"
-                msg.data = np.array(cv2.imencode('.jpg', warp_img)[1]).tobytes()
-                self.img_pub.publish(msg)
-                    
-            except CvBridgeError as e:
-                rospy.loginfo(e)
+            
+            np_arr = np.frombuffer(msg.data, np.uint8)
+            cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            warp_img = self.warp(cv_image)
+            # img type is 8UC4 not compatible with bgr8
+            #### Create CompressedIamge ####
+            msg = CompressedImage()
+            msg.header.stamp = rospy.Time.now()
+            msg.format = "jpeg"
+            msg.data = np.array(cv2.imencode('.jpg', warp_img)[1]).tobytes()
+            self.img_pub.publish(msg)
+            
         else:
             rospy.loginfo('--------------There is no transform matrix:')
 
