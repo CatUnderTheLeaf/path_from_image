@@ -42,7 +42,7 @@ class MockCamera():
             CameraInfo,
             queue_size=1)
 
-        rate = rospy.Rate(10) # 10hz
+        rate = rospy.Rate(30) # 10hz
         while not rospy.is_shutdown():
             self.on_timer()
             rate.sleep()
@@ -51,7 +51,7 @@ class MockCamera():
         
         test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
-        camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0000.jpg'))
+        camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0002.jpg'))
         # make image message and publish it
         # img type is 8UC4 not compatible with bgr8
         msg = CompressedImage()

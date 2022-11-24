@@ -16,7 +16,11 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   visualization_msgs
   message_generation
+  image_transport
+  cv_bridge
 )
+
+find_package(OpenCV 4 REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -108,9 +112,14 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+ INCLUDE_DIRS include
 #  LIBRARIES path_from_image
  CATKIN_DEPENDS message_runtime 
+                roscpp
+                sensor_msgs
+                # std_msgs
+                cv_bridge
+                image_transport
 #  camera_info_manager geometry_msgs roscpp rospy sensor_msgs tf visualization_msgs
 #  DEPENDS system_lib
 )
@@ -124,6 +133,7 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -217,3 +227,7 @@ install(DIRECTORY
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_executable(undistort_node src/undistort_node.cpp)
+target_link_libraries(undistort_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(undistort_node path_from_image_generate_messages_cpp)

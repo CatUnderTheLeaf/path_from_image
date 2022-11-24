@@ -18,6 +18,7 @@ class LaneAreaDrawer():
         self.transformMatrix = None
         self.inverseMatrix = None
         self.cameraInfo = None
+        self.undistortMaps = (None, None)
        
         # Publishers and subscribers
         # Get topic names from ROS params
@@ -60,7 +61,12 @@ class LaneAreaDrawer():
         """             
         if not self.cameraInfo:
             rospy.logdebug('load cameraInfo------------------')
-            self.cameraInfo = msg   
+            self.cameraInfo = msg 
+            m = np.array(self.cameraInfo.K).reshape(3,3)
+            d = np.array(self.cameraInfo.D)
+            size = (self.cameraInfo.width, self.cameraInfo.height)
+            r = np.array(self.cameraInfo.R).reshape(3,3)
+            self.undistortMaps = cv2.initUndistortRectifyMap(m, d, r, m, size, cv2.CV_32FC1)  
 
     def matrix_callback(self, msg):
         """ get transformation matrix from ROS message
@@ -88,7 +94,9 @@ class LaneAreaDrawer():
             np_arr = np.frombuffer(msg.data, np.uint8)
             cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             # rectify image
-            undist = cv2.undistort(cv_image, np.array(self.cameraInfo.K).reshape(3,3), np.array(self.cameraInfo.D), None, np.array(self.cameraInfo.K).reshape(3,3))
+            map1, map2 = self.undistortMaps
+            undist = cv2.remap(cv_image, map1, map2, cv2.INTER_LINEAR)
+
             lane_img, img_waypoints = lane_finder.drawLaneArea(undist,self.transformMatrix, self.inverseMatrix)
             # make image message and publish it
             # img type is 8UC4 not compatible with bgr8
@@ -96,6 +104,7 @@ class LaneAreaDrawer():
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
+            msg.data = np.array(cv2.imencode('.jpg', cv_image)[1]).tobytes()
             msg.data = np.array(cv2.imencode('.jpg', lane_img)[1]).tobytes()
             self.img_pub.publish(msg)
             # make polygon message and publish it

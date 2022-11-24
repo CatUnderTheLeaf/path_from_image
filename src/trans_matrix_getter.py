@@ -78,7 +78,8 @@ class TransMatrixGetter():
                     matrices.inverse_matrix = self.inverseMatrix.flatten()
                     self.matrix_pub.publish(matrices)
                     rospy.logdebug('matrix is ready------------------')  
-                    rospy.logdebug('{}'.format(matrices.warp_matrix))  
+                    rospy.logdebug('{}'.format(matrices.warp_matrix)) 
+                    rospy.logdebug('{}'.format(matrices.inverse_matrix))  
                 rate.sleep()
 
     def info_callback(self, msg):   

@@ -17,7 +17,7 @@ def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     """        
     warp_img = warp(cv_image, transformMatrix, inverseMatrix)
     binary = treshold_binary(warp_img)
-    # treshold_img = np.dstack((binary, binary, binary)) * 255
+    treshold_img = np.dstack((binary, binary, binary)) * 255
     left_fit, right_fit, out_img = fit_polynomial(binary)
     draw_img = draw_filled_polygon(out_img, left_fit, right_fit)
     waypoints, draw_img = get_middle_line(draw_img, left_fit, right_fit, draw=True)
@@ -26,7 +26,7 @@ def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     unwarp_img = warp(draw_img, transformMatrix, inverseMatrix, top_view=False)
     lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
     # lane_area_img = cv2.addWeighted(warp_img,  0.8, draw_img,  0.7, 0)
-    
+    return treshold_img, unwarped_waypoints
     return lane_area_img, unwarped_waypoints
 
 def warp(image, transformMatrix, inverseMatrix, top_view=True):      
@@ -51,7 +51,7 @@ def warp(image, transformMatrix, inverseMatrix, top_view=True):
         birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
     return birds_image
 
-def treshold_binary(image, s_thresh=(90, 255), sx_thresh=(10, 100)):
+def treshold_binary(image, s_thresh=(90, 180), sx_thresh=(10, 100)):
     """Gradient and color tresholding of an image 
 
     Args:
