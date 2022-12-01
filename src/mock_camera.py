@@ -28,6 +28,8 @@ class MockCamera():
         self.info.roi.width = 0
         self.info.roi.do_rectify = False
 
+        self.playFromBag = rospy.get_param('~playbag')
+
 
         # Publishers
         # Get topic names from ROS params
@@ -49,16 +51,18 @@ class MockCamera():
 
     def on_timer(self):
         
-        test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
-        camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0002.jpg'))
-        # make image message and publish it
-        # img type is 8UC4 not compatible with bgr8
-        msg = CompressedImage()
-        msg.header.stamp = rospy.Time.now()
-        msg.format = "jpeg"
-        msg.data = np.array(cv2.imencode('.jpg', camera_img)[1]).tobytes()
-        self.camera_pub.publish(msg)
+        if not self.playFromBag:
+            test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
+            camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0002.jpg'))
+            # make image message and publish it
+            # img type is 8UC4 not compatible with bgr8
+            msg = CompressedImage()
+            msg.header.stamp = rospy.Time.now()
+            msg.format = "jpeg"
+            msg.data = np.array(cv2.imencode('.jpg', camera_img)[1]).tobytes()
+            self.camera_pub.publish(msg)
+
         self.camera_info_pub.publish(self.info)
         
 
