@@ -44,13 +44,14 @@ class MockCamera():
             CameraInfo,
             queue_size=1)
 
-        rate = rospy.Rate(30) # 10hz
+        rate = rospy.Rate(30) 
         while not rospy.is_shutdown():
             self.on_timer()
             rate.sleep()
 
     def on_timer(self):
         
+        time = rospy.Time.now()
         if not self.playFromBag:
             test_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             # rospy.loginfo('test_dir_path: {}'.format(os.path.join(test_dir_path, 'resource', 'img1.png')))
@@ -58,11 +59,11 @@ class MockCamera():
             # make image message and publish it
             # img type is 8UC4 not compatible with bgr8
             msg = CompressedImage()
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = time
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', camera_img)[1]).tobytes()
             self.camera_pub.publish(msg)
-
+        self.info.header.stamp = time
         self.camera_info_pub.publish(self.info)
         
 
