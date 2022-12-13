@@ -27,6 +27,39 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& msg)
 
 void infoCallback(const sensor_msgs::CameraInfo& camInfo_msg)
 {
+// how to fill camera info from yaml
+// pub_img_raw = it.advertise("/camera/image_raw",1);
+// pub_cfg = n.advertise<sensor_msgs::CameraInfo>("/camera/camera_info",1);
+
+// sensor_msgs::CameraInfo cfg;
+// XmlRpc::XmlRpcValue list;
+// int i;
+
+// cfg.header.frame_id = "camera";
+// double temp;
+// ros::param::get("/calibration/image_height", temp);
+// cfg.height = (uint)temp;
+// ros::param::get("/calibration/image_width", temp);
+// cfg.width = (uint)temp;
+// ros::param::get("/calibration/distortion_model", cfg.distortion_model);
+// ros::param::get("/calibration/distortion_coefficients/data", list);
+// cfg.D.clear();
+// for (i=0;i<5;i++) {
+//     cfg.D.push_back((double)list[i]);
+// }
+// ros::param::get("/calibration/camera_matrix/data", list);
+// for (i=0;i<9;i++) {
+//     cfg.K[i] = list[i];
+// }
+// ros::param::get("/calibration/rectification_matrix/data", list);
+// for (i=0;i<9;i++) {
+//     cfg.R[i] = list[i];
+// }
+// ros::param::get("/calibration/projection_matrix/data", list);
+// for (i=0;i<12;i++) {
+//     cfg.P[i] = list[i];
+// }
+
   ROS_INFO("I heard: info");
   if (!cameraInfoSet) {
     cv::Mat intrK(3, 3, CV_64FC1);
