@@ -231,3 +231,7 @@ install(DIRECTORY
 add_executable(undistort_node src/undistort_node.cpp)
 target_link_libraries(undistort_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 add_dependencies(undistort_node path_from_image_generate_messages_cpp)
+
+add_executable(republish_image_info src/republish_image_info.cpp)
+target_link_libraries(republish_image_info ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(republish_image_info path_from_image_generate_messages_cpp)
