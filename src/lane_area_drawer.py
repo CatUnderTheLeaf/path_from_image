@@ -86,7 +86,8 @@ class LaneAreaDrawer():
             # image is already rectified
             np_arr = np.frombuffer(msg.data, np.uint8)
             cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            lane_img, img_waypoints = lane_finder.drawLaneArea(cv_image,self.transformMatrix, self.inverseMatrix)
+            # lane_img, img_waypoints = lane_finder.drawLaneArea(cv_image,self.transformMatrix, self.inverseMatrix)
+            lane_img, img_waypoints = lane_finder.drawMiddleLine(cv_image,self.transformMatrix, self.inverseMatrix)
             # make image message and publish it
             # img type is 8UC4 not compatible with bgr8
             #### Create CompressedIamge ####

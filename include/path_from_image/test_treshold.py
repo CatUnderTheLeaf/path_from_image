@@ -22,10 +22,11 @@ dist = np.array([-3.28296006e-01, 1.19443754e-01, -1.85799276e-04, 8.39998127e-0
 
 test_dir_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print(test_dir_path)
-camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0002.jpg'))
+camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0003.jpg'))
+# undistort if not already
+# undist = cv2.undistort(camera_img, camera_mtx, dist, None, camera_mtx)
+# lane_img, points = lane_finder.drawLaneArea(undist, transform_matrix, inverse_matrix)
+# lane_img, points = lane_finder.drawLaneArea(camera_img, transform_matrix, inverse_matrix)
 
-undist = cv2.undistort(camera_img, camera_mtx, dist, None, camera_mtx)
-
-lane_img, points = lane_finder.drawLaneArea(undist, transform_matrix, inverse_matrix)
-# path_from_image.src.lane_finder.drawLaneArea(cv_image, transform_matrix, inverse_matrix)
+lane_img, points = lane_finder.drawMiddleLine(camera_img, transform_matrix, inverse_matrix)
 cv2.imwrite(os.path.join(test_dir_path, 'resource', 'lane_image.jpg'), lane_img)

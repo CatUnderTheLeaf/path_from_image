@@ -4,6 +4,34 @@ import rospy
 import numpy as np
 import cv2
 from scipy.signal import find_peaks
+
+def drawMiddleLine(cv_image, transformMatrix, inverseMatrix):
+    """Draw line on top of the image
+        get several points of it
+    
+    Args:
+        cv_image (OpenCV image): image to be drawn on
+    
+    Returns:
+        np.array: image with line drawn on it
+        np.array(x,y): a couple of points of the middle line
+    """    
+    # warp_img = warp(cv_image, transformMatrix, inverseMatrix)
+    binary = yellow_treshold_binary(cv_image)
+    # unwarp_img = warp(binary, transformMatrix, inverseMatrix, top_view=False)
+    
+    # return binary, np.array(cv_image)
+    treshold_img = np.dstack((binary, binary, binary)) * 255
+    return treshold_img, np.array(cv_image)
+    treshold_img = binary
+    nonzero = treshold_img.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    middle_fit = get_polynomial(nonzeroy, nonzerox)
+    
+    line_img, lane_points = draw_polyline(cv_image, middle_fit)
+    print(lane_points)
+    return line_img, lane_points  
         
 def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     """Draw lane area on top of the image
@@ -14,19 +42,29 @@ def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     
     Returns:
         np.array: image with lane area drawn on it
-    """        
+
+    """      
     warp_img = warp(cv_image, transformMatrix, inverseMatrix)
+    # return warp_img, np.array(cv_image)  
     binary = treshold_binary(warp_img)
+    # binary = treshold_binary(cv_image)    
     treshold_img = np.dstack((binary, binary, binary)) * 255
+    # return treshold_img, np.array(cv_image)  
+
     left_fit, right_fit, out_img = fit_polynomial(binary)
+    # return out_img, np.array(cv_image)  
     draw_img = draw_filled_polygon(out_img, left_fit, right_fit)
-    waypoints, draw_img = get_middle_line(draw_img, left_fit, right_fit, draw=True)
-    unwarped_waypoints = cv2.perspectiveTransform(np.array([waypoints]), inverseMatrix)
+    # return draw_img, np.array(cv_image)  
     
+    waypoints, draw_img = get_middle_line(draw_img, left_fit, right_fit, draw=True)
+    # return draw_img, waypoints
+    unwarped_waypoints = cv2.perspectiveTransform(np.array([waypoints]), inverseMatrix)
+    # return draw_img, unwarped_waypoints
     unwarp_img = warp(draw_img, transformMatrix, inverseMatrix, top_view=False)
+    # return unwarp_img, unwarped_waypoints
     lane_area_img = cv2.addWeighted(cv_image,  0.8, unwarp_img,  0.7, 0)
     # lane_area_img = cv2.addWeighted(warp_img,  0.8, draw_img,  0.7, 0)
-    return treshold_img, unwarped_waypoints
+    
     return lane_area_img, unwarped_waypoints
 
 def warp(image, transformMatrix, inverseMatrix, top_view=True):      
@@ -40,18 +78,17 @@ def warp(image, transformMatrix, inverseMatrix, top_view=True):
         cv2_img: warped image
     """        
     h, w = image.shape[0], image.shape[1]
-    birds_image = image
     matrix = transformMatrix
     if not top_view:
         matrix = inverseMatrix
     if (matrix is None):
         print("before warp call set_transform_matrix()")
-        return birds_image
+        return image
     else:
-        birds_image = cv2.warpPerspective(np.copy(image), matrix, (w, h))            
+        birds_image = cv2.warpPerspective(image, matrix, (w, h))            
     return birds_image
 
-def treshold_binary(image, s_thresh=(90, 180), sx_thresh=(10, 100)):
+def treshold_binary(image, s_thresh=(130, 190), sx_thresh=(30, 100)):
     """Gradient and color tresholding of an image 
 
     Args:
@@ -66,7 +103,7 @@ def treshold_binary(image, s_thresh=(90, 180), sx_thresh=(10, 100)):
     hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
     l_channel = hls[:,:,1]
     s_channel = hls[:,:,2]
-        
+
     # Sobel x
     sobelx = cv2.Sobel(l_channel, cv2.CV_64F, 1, 0) # Take the derivative in x
     abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
@@ -88,8 +125,75 @@ def treshold_binary(image, s_thresh=(90, 180), sx_thresh=(10, 100)):
     combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
     return combined_binary
 
-def fit_polynomial(treshold_warped, ym_per_pix=1, xm_per_pix=1):
-    """return polynomial for both lanes
+def yellow_treshold_binary(image):
+    """yellow color tresholding of an image,
+    upper part of image is cut, it doesn't have relevant information
+
+    Args:
+        image (OpenCV image): image to be tresholded
+    Returns:
+        np.array: binary image
+    """        
+    # Convert to HSV color space
+    # hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # h = hsv[:,:,0]
+    # yellow_lower = np.array([24, 100, 45])
+    # yellow_upper = np.array([48, 190, 107])
+    # # (hMin = 33 , sMin = 85, vMin = 85), (hMax = 48 , sMax = 190, vMax = 107)
+    # # (hMin = 24 , sMin = 100, vMin = 40), (hMax = 41 , sMax = 198, vMax = 96)
+    # mask_yellow = cv2.inRange(hsv, yellow_lower, yellow_upper)
+    # yellow_output = cv2.bitwise_and(image, image, mask=mask_yellow)
+    # yellow_output = np.zeros_like(h)
+    # yellow_output[(mask_yellow > 0)] = 1
+    
+    # yellow_output[(h > 30) & (h < 35)] = 1
+
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    lab_thresh=(144, 255)
+    # # store the a-channel
+    b_channel = lab[:,:,2]
+    # # Automate threshold using Otsu method
+    # # th = cv2.threshold(b_channel,int(np.max(b_channel) - 20),255,cv2.THRESH_BINARY)[1]
+    # th = cv2.threshold(b_channel, 145, 255, cv2.THRESH_BINARY)[1]
+    # # Mask the result with the original image
+    # # yellow_output = cv2.bitwise_and(image, image, mask = th)
+    lab_binary = np.zeros_like(b_channel)
+    lab_binary[(b_channel >= lab_thresh[0]) & (b_channel <= lab_thresh[1])] = 1
+    
+    # yellow_output[(th > 0)] = 255
+    # s_thresh=(70, 90)
+    sx_thresh=(5, 100)
+    # Convert to HLS color space and separate the V channel
+    hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+    l_channel = hls[:,:,1]
+    # s_channel = hls[:,:,2]
+
+    # Sobel x
+    sobelx = cv2.Sobel(l_channel, cv2.CV_64F, 1, 0) # Take the derivative in x
+    abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
+    scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx)) if (np.max(abs_sobelx)) else np.uint8(255*abs_sobelx)
+    
+    # Threshold x gradient
+    sxbinary = np.zeros_like(scaled_sobel)
+    sxbinary[(scaled_sobel >= sx_thresh[0]) & (scaled_sobel <= sx_thresh[1])] = 1
+    
+    # Threshold color channel
+    # in simulation h and s channels are zeros
+    # if (np.max(s_channel) == 0):
+    #     s_channel = l_channel
+    # s_binary = np.zeros_like(s_channel)
+    # s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
+    
+    # Combine the two binary thresholds
+    yellow_output = np.zeros_like(sxbinary)
+    # this outlines 3 lines
+    yellow_output[(sxbinary == 1) & (lab_binary == 1)] = 1
+    
+    yellow_output[:yellow_output.shape[0]//2-15, :yellow_output.shape[1]] = 0
+    return yellow_output
+
+def fit_polynomial(treshold_warped):
+    """find lane pixels and return polynomial for both lanes
 
     Args:
         treshold_warped (CVimage): tresholded binary image
@@ -108,10 +212,24 @@ def fit_polynomial(treshold_warped, ym_per_pix=1, xm_per_pix=1):
     
     # check if the image is not empty
     if (leftx.size > 0 and lefty.size > 0 and rightx.size > 0 and righty.size > 0):
-        left_fit = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
-        right_fit = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)      
+        left_fit = get_polynomial(lefty, leftx)
+        right_fit = get_polynomial(righty, rightx)      
     
     return left_fit, right_fit, out_img
+
+def get_polynomial(y, x, ym_per_pix=1, xm_per_pix=1):
+    """polynomial for a single line
+
+    Args:
+        y(array): y-coordinates of a line
+        x(array): x-coordinates of a line
+        ym_per_pix (int, optional): meters per pixel in y dimension. Defaults to 1.
+        xm_per_pix (int, optional): meters per pixel in x dimension. Defaults to 1.
+
+    Returns:
+        array: polynomial of the line
+    """  
+    return np.polyfit(y*ym_per_pix, x*xm_per_pix, 2)
 
 def find_lane_pixels(image, draw=False):
     """find lane pixels in image with sliding windows
@@ -131,9 +249,9 @@ def find_lane_pixels(image, draw=False):
     # Set minimum number of pixels found to recenter window
     minpix = 100
 
-    # Take a histogram of the bottom half of the image
+    # # Take a histogram of the bottom half of the image
     histogram = np.sum(image[image.shape[0]//2:,:], axis=0)
-    # Create an output image to draw on and visualize the result
+    # # Create an output image to draw on and visualize the result
     out_img = np.dstack((image, image, image))
     peaks, _ = find_peaks(histogram, distance=100)
     # if the image is empty
@@ -219,8 +337,27 @@ def find_lane_pixels(image, draw=False):
 
         out_img[lefty, leftx] = [0, 0, 255]
         out_img[righty, rightx] = [255, 0, 0]
-
+    # leftx = lefty = rightx = righty = np.array([])
     return leftx, lefty, rightx, righty, out_img 
+
+def draw_polyline(img, fit):
+    """draw polyline on the image
+
+    Args:
+        img (CVimage): image to be drawn on
+        fit (_type_): lane line
+    Returns:
+        CVimage: image with a polyline
+    """        
+    draw_img = np.copy(img)
+    ploty = np.linspace(draw_img.shape[0]//2, draw_img.shape[0]-1, 10)
+    fitx = get_xy(ploty, fit)
+        
+    all_points = [(np.asarray([fitx, ploty]).T).astype(np.int32)]
+    cv2.polylines(draw_img, all_points, False, (0, 255, 0), 2)
+    lane_points = np.asarray([fitx, ploty]).T
+    
+    return draw_img, lane_points
 
 def draw_filled_polygon(img, left_fit, right_fit):
     """draw filled polygon on the image
@@ -234,7 +371,9 @@ def draw_filled_polygon(img, left_fit, right_fit):
         CVimage: image with filled polygon
     """        
     draw_img = np.copy(img)
-    ploty, left_fitx, right_fitx = get_xy(draw_img.shape[0], draw_img.shape[0], left_fit, right_fit)
+    ploty = np.linspace(0, draw_img.shape[0]-1, draw_img.shape[0])
+    left_fitx = get_xy(ploty, left_fit)
+    right_fitx = get_xy(ploty, right_fit)
     
     all_x = np.concatenate([left_fitx, np.flip(right_fitx, 0)])
     all_y = np.concatenate([ploty, np.flip(ploty, 0)])
@@ -243,28 +382,24 @@ def draw_filled_polygon(img, left_fit, right_fit):
     
     return draw_img
 
-def get_xy(shape_0, num_points, left_fit, right_fit):
-    """get x and y coordinates of the lane area
+def get_xy(ploty, fit):
+    """get x coordinates of the lane
 
     Args:
-        shape_0 (int): height of the image
-        left_fit (array): left lane line
-        right_fit (array): right lane line
+        ploty (array): y-coordinates
+        fit (array): lane line
 
     Returns:
         tuple: y coordinates and left and right x coordinates
     """        
-    ploty = np.linspace(0, shape_0-1, num_points )
     try:
-        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+        fitx = fit[0]*ploty**2 + fit[1]*ploty + fit[2]
     except TypeError:
         # Avoids an error if `left` and `right_fit` are still none or incorrect
         print('The function failed to fit a line!')
-        left_fitx = 1*ploty**2 + 1*ploty
-        right_fitx = 1*ploty**2 + 1*ploty
+        fitx = 1*ploty**2 + 1*ploty
         
-    return ploty, left_fitx, right_fitx
+    return fitx
 
 def get_middle_line(img, left_fit, right_fit, draw=False):
     """get middle line of the lane area
@@ -280,7 +415,9 @@ def get_middle_line(img, left_fit, right_fit, draw=False):
     """        
     draw_img = np.copy(img)
     # get only 10 points, it is enough
-    ploty, left_fitx, right_fitx = get_xy(img.shape[0], 10, left_fit, right_fit)
+    ploty = np.linspace(0, img.shape[0]-1, 10)
+    left_fitx = get_xy(ploty, left_fit)
+    right_fitx = get_xy(ploty, right_fit)
     middle_fitx = (left_fitx + right_fitx) / 2
     middle_lane_points = np.asarray([middle_fitx, ploty]).T
     if draw:

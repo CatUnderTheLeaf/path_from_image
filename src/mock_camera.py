@@ -5,7 +5,7 @@ import os
 import numpy as np
 
 import rospy
-from sensor_msgs.msg import CompressedImage, CameraInfo
+from sensor_msgs.msg import CompressedImage, CameraInfo, Image
 
 class MockCamera():
 
@@ -36,7 +36,7 @@ class MockCamera():
        
         self.camera_pub = rospy.Publisher(
             rospy.get_param('~image_topic'),
-            CompressedImage,
+            Image,
             queue_size=1)
 
         self.camera_info_pub = rospy.Publisher(
