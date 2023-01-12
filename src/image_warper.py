@@ -66,6 +66,7 @@ class ImageWarper():
             #### Create CompressedIamge ####
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
+            msg.header.frame_id = 'base_footprint'
             msg.format = "jpeg"
             msg.data = np.array(cv2.imencode('.jpg', warp_img)[1]).tobytes()
             self.img_pub.publish(msg)

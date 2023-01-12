@@ -21,16 +21,12 @@ def drawMiddleLine(cv_image, transformMatrix, inverseMatrix):
     # unwarp_img = warp(binary, transformMatrix, inverseMatrix, top_view=False)
     
     # return binary, np.array(cv_image)
-    treshold_img = np.dstack((binary, binary, binary)) * 255
-    return treshold_img, np.array(cv_image)
-    treshold_img = binary
-    nonzero = treshold_img.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
+    # treshold_img = np.dstack((binary, binary, binary)) * 255
+    pixels_line_img, nonzerox, nonzeroy = find_middle_line_pixels(binary)
+    # return pixels_line_img, np.array(cv_image)
     middle_fit = get_polynomial(nonzeroy, nonzerox)
-    
     line_img, lane_points = draw_polyline(cv_image, middle_fit)
-    print(lane_points)
+    # print(lane_points)
     return line_img, lane_points  
         
 def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
@@ -134,39 +130,21 @@ def yellow_treshold_binary(image):
     Returns:
         np.array: binary image
     """        
-    # Convert to HSV color space
-    # hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # h = hsv[:,:,0]
-    # yellow_lower = np.array([24, 100, 45])
-    # yellow_upper = np.array([48, 190, 107])
-    # # (hMin = 33 , sMin = 85, vMin = 85), (hMax = 48 , sMax = 190, vMax = 107)
-    # # (hMin = 24 , sMin = 100, vMin = 40), (hMax = 41 , sMax = 198, vMax = 96)
-    # mask_yellow = cv2.inRange(hsv, yellow_lower, yellow_upper)
-    # yellow_output = cv2.bitwise_and(image, image, mask=mask_yellow)
-    # yellow_output = np.zeros_like(h)
-    # yellow_output[(mask_yellow > 0)] = 1
-    
-    # yellow_output[(h > 30) & (h < 35)] = 1
-
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    lab_thresh=(144, 255)
-    # # store the a-channel
+    lab_thresh=(140, 255)
+    # b channel for yellow and blue colors
     b_channel = lab[:,:,2]
-    # # Automate threshold using Otsu method
-    # # th = cv2.threshold(b_channel,int(np.max(b_channel) - 20),255,cv2.THRESH_BINARY)[1]
-    # th = cv2.threshold(b_channel, 145, 255, cv2.THRESH_BINARY)[1]
-    # # Mask the result with the original image
-    # # yellow_output = cv2.bitwise_and(image, image, mask = th)
     lab_binary = np.zeros_like(b_channel)
     lab_binary[(b_channel >= lab_thresh[0]) & (b_channel <= lab_thresh[1])] = 1
     
+    
     # yellow_output[(th > 0)] = 255
-    # s_thresh=(70, 90)
-    sx_thresh=(5, 100)
-    # Convert to HLS color space and separate the V channel
+    s_thresh=(30, 50)
+    sx_thresh=(10, 100) #20, 100
+    # Convert to HLS color space
     hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
     l_channel = hls[:,:,1]
-    # s_channel = hls[:,:,2]
+    s_channel = hls[:,:,2]
 
     # Sobel x
     sobelx = cv2.Sobel(l_channel, cv2.CV_64F, 1, 0) # Take the derivative in x
@@ -177,17 +155,22 @@ def yellow_treshold_binary(image):
     sxbinary = np.zeros_like(scaled_sobel)
     sxbinary[(scaled_sobel >= sx_thresh[0]) & (scaled_sobel <= sx_thresh[1])] = 1
     
-    # Threshold color channel
+    # Threshold light channel
     # in simulation h and s channels are zeros
     # if (np.max(s_channel) == 0):
     #     s_channel = l_channel
-    # s_binary = np.zeros_like(s_channel)
-    # s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
+    s_binary = np.zeros_like(s_channel)
+    s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
     
     # Combine the two binary thresholds
     yellow_output = np.zeros_like(sxbinary)
     # this outlines 3 lines
-    yellow_output[(sxbinary == 1) & (lab_binary == 1)] = 1
+    yellow_output[(sxbinary == 1) & (lab_binary == 1) & (s_binary != 1)] = 1
+    # yellow_output[(sxbinary == 1) & (lab_binary == 1)] = 1
+    # yellow_output[(lab_binary == 1)] = 1
+    # yellow_output[(sxbinary == 1)] = 1
+    # yellow_output[(s_binary == 1)] = 1
+    # yellow_output[(h_binary == 1)] = 1
     
     yellow_output[:yellow_output.shape[0]//2-15, :yellow_output.shape[1]] = 0
     return yellow_output
@@ -339,6 +322,107 @@ def find_lane_pixels(image, draw=False):
         out_img[righty, rightx] = [255, 0, 0]
     # leftx = lefty = rightx = righty = np.array([])
     return leftx, lefty, rightx, righty, out_img 
+
+def find_middle_line_pixels(image, draw=False):
+    """find middle line pixels in image with sliding windows
+
+    Args:
+        image (CVimage): tresholded binary image
+        draw (bool, optional): draw rectangles on the image or not. Defaults to False.
+
+    Returns:
+        tuple: line nonzero pixels
+    """    
+    # HYPERPARAMETERS
+    # Choose the number of sliding windows
+    nwindows = 30
+    # Set the width of the windows +/- margin
+    margin = 35
+    # Set minimum number of pixels found to recenter window
+    minpix = 2
+
+    # seen = False
+
+    # # Take a histogram of the bottom half of the image
+    histogram = np.sum(image[image.shape[0]//6*5:,:], axis=0)
+    # # Create an output image to draw on and visualize the result
+    out_img = np.dstack((image, image, image)) *255
+    # return out_img, np.array([]), np.array([])
+    peaks, properties = find_peaks(histogram, height =4, width=1)
+    # import matplotlib.pyplot as plt
+    # plt.plot(histogram)
+    # plt.plot(peaks, histogram[peaks], "x")
+    # plt.show()
+    # print(properties)
+    # print(properties['peak_heights'])
+    # if the image is empty
+    if (not len(properties['peak_heights'])):
+        leftx = lefty = np.array([])
+        # import os
+        # test_dir_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # name = str(np.random.randint(100))
+        # cv2.imwrite(os.path.join(test_dir_path, 'resource', name+'.jpg'), orig)
+    else:        
+        # Find the peak of the left and right halves of the histogram
+        # These will be the starting point for the left and right lines
+        point = np.argmax(properties['peak_heights'])
+        leftx_base = peaks[point]
+        # print(leftx_base)
+        # Set height of windows - based on nwindows above and image shape
+        window_height = np.int64((image.shape[0]//2+35)//nwindows)
+        # Identify the x and y positions of all nonzero pixels in the image
+        nonzero = image.nonzero()
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Current positions to be updated later for each window in nwindows
+        leftx_current = leftx_base
+        
+        # Create empty lists to receive left and right lane pixel indices
+        left_lane_inds = []
+        
+        # Step through the windows one by one
+        for window in range(nwindows):
+            # Identify window boundaries in x and y (and right and left)
+            win_y_low = image.shape[0] - (window+1)*window_height
+            win_y_high = image.shape[0]- window*window_height
+            
+            # Find the four below boundaries of the window 
+            win_xleft_low = leftx_current - margin 
+            win_xleft_high = leftx_current + margin                     
+            # draw window rectangles
+            if draw:
+                cv2.rectangle(out_img,(win_xleft_low,win_y_low),
+                (win_xleft_high,win_y_high),(0,255,0), 2) 
+            # Identify the nonzero pixels in x and y within the window 
+            good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+            (nonzerox >= win_xleft_low) &  (nonzerox < win_xleft_high)).nonzero()[0]
+            # Append these indices to the lists
+            left_lane_inds.append(good_left_inds)
+            # If you found > minpix pixels, recenter next window on their mean position 
+            # or stop windows
+            if len(good_left_inds) > minpix:
+                leftx_current=np.int64(np.mean(nonzerox[good_left_inds]))
+            #     seen = True
+            # if not len(good_left_inds) and not seen:
+            #     import os
+            #     test_dir_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            #     name = str(np.random.randint(100))
+            #     cv2.imwrite(os.path.join(test_dir_path, 'resource', name+'.jpg'), orig)
+            #     seen = True
+            
+        # Concatenate the arrays of indices (previously was a list of lists of pixels)
+        try:
+            left_lane_inds = np.concatenate(left_lane_inds)
+        except ValueError:
+            # Avoids an error if the above is not implemented fully
+            pass
+
+        # Extract left and right line pixel positions
+        leftx = nonzerox[left_lane_inds]
+        lefty = nonzeroy[left_lane_inds] 
+
+        out_img[lefty, leftx] = [0, 0, 255]
+    return  out_img, leftx, lefty
 
 def draw_polyline(img, fit):
     """draw polyline on the image
