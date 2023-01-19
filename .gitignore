@@ -3,3 +3,5 @@ bagfiles/*
 resource/*
 full_conv_network/dataset/*
 full_conv_network/test/*
+full_conv_network/full_conv_labels.p
+full_conv_network/full_conv_train.p
