@@ -2,6 +2,55 @@ import os
 import cv2
 import numpy as np
 import lane_finder
+from keras.models import load_model
+
+# Class to average lanes with
+class Lanes():
+    def __init__(self):
+        self.recent_fit = []
+        self.avg_fit = []
+
+
+def road_lines(image):
+    """ Takes in a road image, re-sizes for the model,
+    predicts the lane to be drawn from the model in G color,
+    recreates an RGB image of a lane and merges with the
+    original road image.
+    """
+
+    # Get image ready for feeding into model
+    # size = (160,80)
+    # small_img = cv2.resize(image[image.shape[0]//2-20:,:], size)
+    small_img = np.array(image)
+    small_img = small_img[None,:,:,:]
+
+    # Make prediction with neural network (un-normalize value by multiplying by 255)
+    prediction = model.predict(small_img)[0] * 255
+
+    # Add lane prediction to list for averaging
+    # lanes.recent_fit.append(prediction)
+    # # # Only using last five for average
+    # if len(lanes.recent_fit) > 5:
+    #     lanes.recent_fit = lanes.recent_fit[1:]
+
+    # # Calculate average detection
+    # lanes.avg_fit = np.mean(np.array([i for i in lanes.recent_fit]), axis = 0)
+
+    # # Generate fake R & B color dimensions, stack with G
+    # blanks = np.zeros_like(lanes.avg_fit).astype(np.uint8)
+    blanks = np.zeros_like(prediction).astype(np.uint8)
+    # lane_drawn = np.dstack((blanks, lanes.avg_fit, blanks))
+    lane_drawn = np.dstack((blanks, blanks, prediction))
+    # Re-size to match the original image
+    # lane_image = cv2.resize(lane_drawn, (410, 308))
+
+    print(image.shape)
+    print(lane_drawn.shape)
+
+    # Merge the lane drawing onto the original image
+    result = cv2.addWeighted(image.astype(np.uint8), 0.8, lane_drawn.astype(np.uint8), 1, 0)
+    # result = lane_drawn
+    return result
 
 transform_matrix = np.array(
                             # [[-1.44070347e+00, -2.24787583e+00,  5.03003158e+02],
@@ -21,13 +70,47 @@ camera_mtx = np.array([[202.35126146, 0, 206.80143037], [0, 201.08542928, 153.32
 dist = np.array([-3.28296006e-01, 1.19443754e-01, -1.85799276e-04, 8.39998127e-04, -2.06502314e-02] )
 
 test_dir_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-print(test_dir_path)
-camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0000.jpg'))
-# camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', '24.jpg'))
+# # print(test_dir_path)
+camera_img = cv2.imread(os.path.join(test_dir_path, 'resource', 'frame0008.jpg'))
 # undistort if not already
-# undist = cv2.undistort(camera_img, camera_mtx, dist, None, camera_mtx)
-# lane_img, points = lane_finder.drawLaneArea(undist, transform_matrix, inverse_matrix)
-# lane_img, points = lane_finder.drawLaneArea(camera_img, transform_matrix, inverse_matrix)
+undist = cv2.undistort(camera_img, camera_mtx, dist, None, camera_mtx)
+lane_image = cv2.resize(camera_img, (205, 154))
+cropped = lane_image[1:lane_image.shape[0]-1, 2:lane_image.shape[1]-3]
 
-lane_img, points = lane_finder.drawMiddleLine(camera_img, transform_matrix, inverse_matrix)
-cv2.imwrite(os.path.join(test_dir_path, 'resource', 'lane_image.jpg'), lane_img)
+model_path = os.path.join(test_dir_path, 'full_conv_network', 'FCNN_model.h5')
+model = load_model(model_path)
+# Create lanes object
+lanes = Lanes()
+
+resized_image = road_lines(cropped)
+cv2.imwrite(os.path.join(test_dir_path, 'resource', 'lane_image.jpg'), resized_image)
+
+
+
+# import glob
+# # resize images
+# img_path = os.path.join(test_dir_path, 'full_conv_network', 'dataset', 'train', '*')
+# images = glob.glob(img_path)
+# i = 4119
+# for fname in images:
+#     img = cv2.imread(fname)
+#     # res_image = cv2.resize(img, (205, 154))
+#     res_image = cv2.flip(img, 1)
+#     head_tail = os.path.split(fname)
+#     name = 'frame'+ str(i)+'.jpg'
+#     # name = head_tail[1]
+#     print(name)
+#     cv2.imwrite(os.path.join(test_dir_path, 'full_conv_network', 'dataset', 'temp', name), res_image)
+#     i+=1
+
+# make line images
+# img_path = os.path.join(test_dir_path, 'bagfiles', 'train', '*')
+# images = glob.glob(img_path)
+# for fname in images:
+#     img = cv2.imread(fname)
+#     lane_img, points = lane_finder.drawMiddleLine(img)
+#     b_channel = lane_img[:,:,1]
+#     b_channel = b_channel[:, :, None]
+#     head_tail = os.path.split(fname)
+#     cv2.imwrite(os.path.join(test_dir_path, 'bagfiles', 'labels', head_tail[1]), b_channel)
+#     # cv2.imwrite(os.path.join(test_dir_path, 'bagfiles', 'labels', head_tail[1]), lane_img)
