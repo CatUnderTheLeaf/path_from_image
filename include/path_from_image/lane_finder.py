@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 from scipy.signal import find_peaks
 
-def drawMiddleLine(cv_image, transformMatrix, inverseMatrix):
+def drawMiddleLine(cv_image):
     """Draw line on top of the image
         get several points of it
     
@@ -24,10 +24,14 @@ def drawMiddleLine(cv_image, transformMatrix, inverseMatrix):
     # treshold_img = np.dstack((binary, binary, binary)) * 255
     pixels_line_img, nonzerox, nonzeroy = find_middle_line_pixels(binary)
     # return pixels_line_img, np.array(cv_image)
-    middle_fit = get_polynomial(nonzeroy, nonzerox)
-    line_img, lane_points = draw_polyline(cv_image, middle_fit)
-    # print(lane_points)
-    return line_img, lane_points  
+    if (nonzerox.size and nonzeroy.size):
+        middle_fit = get_polynomial(nonzeroy, nonzerox)
+        # line_img, lane_points = draw_polyline(cv_image, middle_fit)
+        line_img, lane_points = draw_polyline(np.zeros_like(cv_image), middle_fit)
+        return line_img, np.array(lane_points)
+    else:
+        middle_fit = np.array(cv_image)
+        return cv_image, np.array(cv_image)
         
 def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     """Draw lane area on top of the image
