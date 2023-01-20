@@ -122,13 +122,13 @@ class LaneAreaDrawer():
         return polygon
 
 def main(args):
-    rospy.init_node('lane_area_drawer', anonymous=True, log_level=rospy.INFO)
+    rospy.init_node('lane_drawer', anonymous=True, log_level=rospy.INFO)
     node = LaneAreaDrawer()
 
     try:
-        print("running lane_area_drawer node")
+        print("running lane_drawer node")
     except KeyboardInterrupt:
-        print("Shutting down ROS lane_area_drawer node")
+        print("Shutting down ROS lane_drawer node")
 
 if __name__ == '__main__':
     main(sys.argv)

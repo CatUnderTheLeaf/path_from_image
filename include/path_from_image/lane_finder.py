@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
 import rospy
-
+import os
 import numpy as np
 import cv2
 from scipy.signal import find_peaks
+from keras.models import load_model
 
-def drawMiddleLine(cv_image):
+package_dir_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+model_path = os.path.join(package_dir_path, 'full_conv_network', 'FCNN_model.h5')
+model = load_model(model_path)
+# Class to average lanes with
+# class Lanes():
+#     def __init__(self):
+#         self.recent_fit = []
+#         self.avg_fit = []
+
+def drawMiddleLine(cv_image, useFCNN=True):
     """Draw line on top of the image
         get several points of it
     
@@ -16,23 +26,63 @@ def drawMiddleLine(cv_image):
         np.array: image with line drawn on it
         np.array(x,y): a couple of points of the middle line
     """    
-    # warp_img = warp(cv_image, transformMatrix, inverseMatrix)
-    binary = yellow_treshold_binary(cv_image)
-    # unwarp_img = warp(binary, transformMatrix, inverseMatrix, top_view=False)
-    
-    # return binary, np.array(cv_image)
-    # treshold_img = np.dstack((binary, binary, binary)) * 255
+    if (useFCNN):
+        binary = predict_binary(cv_image)
+    else:
+        binary = yellow_treshold_binary(cv_image)
     pixels_line_img, nonzerox, nonzeroy = find_middle_line_pixels(binary)
+    
     # return pixels_line_img, np.array(cv_image)
     if (nonzerox.size and nonzeroy.size):
         middle_fit = get_polynomial(nonzeroy, nonzerox)
-        # line_img, lane_points = draw_polyline(cv_image, middle_fit)
-        line_img, lane_points = draw_polyline(np.zeros_like(cv_image), middle_fit)
+        line_img, lane_points = draw_polyline(cv_image, middle_fit)
+        # line_img, lane_points = draw_polyline(np.zeros_like(cv_image), middle_fit)
         return line_img, np.array(lane_points)
     else:
-        middle_fit = np.array(cv_image)
-        return cv_image, np.array(cv_image)
-        
+        return cv_image, []
+
+def predict_binary(cv_image):
+    small_img = np.array(cv_image)
+    small_img = cv2.resize(small_img, (205, 154))
+    small_img = small_img[1:small_img.shape[0]-1, 2:small_img.shape[1]-3]
+    small_img = small_img[None,:,:,:]
+
+    # Make prediction with neural network (un-normalize value by multiplying by 255)
+    prediction = model.predict(small_img)[0] * 255
+
+    # Add lane prediction to list for averaging
+    # lanes.recent_fit.append(prediction)
+    # # # Only using last five for average
+    # if len(lanes.recent_fit) > 5:
+    #     lanes.recent_fit = lanes.recent_fit[1:]
+
+    # # Calculate average detection
+    # lanes.avg_fit = np.mean(np.array([i for i in lanes.recent_fit]), axis = 0)
+
+    # # Generate fake R & B color dimensions, stack with G
+    # blanks = np.zeros_like(lanes.avg_fit).astype(np.uint8)
+    # blanks = np.zeros_like(prediction).astype(np.uint8)
+    # lane_drawn = np.dstack((blanks, lanes.avg_fit, blanks))
+    # lane_drawn = np.dstack((blanks, blanks, prediction))
+    # Re-size to match the original image
+    # lane_image = cv2.resize(lane_drawn, (410, 308))
+
+    # print(image.shape)
+    # print(lane_drawn.shape)
+
+    # Merge the lane drawing onto the original image
+    # result = cv2.addWeighted(image.astype(np.uint8), 0.8, lane_drawn.astype(np.uint8), 1, 0)
+    # result = lane_drawn
+
+    # return to initial size
+    prediction = prediction[:,:,0]
+    
+    result = np.full((cv_image.shape[0]//2, cv_image.shape[1]//2), 0, dtype=np.uint8)
+    result[1:cv_image.shape[0]//2-1, 2:cv_image.shape[1]//2-3] = prediction
+    result = cv2.resize(result, (cv_image.shape[1], cv_image.shape[0]))
+     
+    return result
+
 def drawLaneArea(cv_image, transformMatrix, inverseMatrix):
     """Draw lane area on top of the image
         find points of the middle line of the lane

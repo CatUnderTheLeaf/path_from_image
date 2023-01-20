@@ -167,7 +167,7 @@ def main():
     model.compile(optimizer='Adam', loss='mean_squared_error')
 
     # # Save model architecture and weights
-    model_path = os.path.join(test_dir_path, 'full_conv_network', 'FCNN_model.h5')
+    model_path = os.path.join(test_dir_path, 'full_conv_network', 'FCNN_model2.h5')
     model.save(model_path)
 
     # # Show summary of model

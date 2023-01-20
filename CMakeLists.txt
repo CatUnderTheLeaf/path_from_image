@@ -181,7 +181,7 @@ install(DIRECTORY
 # catkin_install_python(PROGRAMS
 #   src/mock_camera.py
 #   src/trans_matrix_getter.py
-#   src/lane_area_drawer.py
+#   src/lane_drawer.py
 #   src/image_warper.py
 #   src/lane_finder.py
 #   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
