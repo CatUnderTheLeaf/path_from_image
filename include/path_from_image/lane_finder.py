@@ -4,10 +4,17 @@ import os
 import numpy as np
 import cv2
 from scipy.signal import find_peaks
+# import tensorflow as tf
+# print("Num of GPUs available: ", len(tf.test.gpu_device_name()))
+# from tensorflow import keras
+# print(tf.__version__)
+# print(keras.__version__)
 from keras.models import load_model
 
+
+
 package_dir_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-model_path = os.path.join(package_dir_path, 'full_conv_network', 'FCNN_model.h5')
+model_path = os.path.join(package_dir_path, 'full_conv_network', 'FCNN_model2.h5')
 model = load_model(model_path)
 # Class to average lanes with
 # class Lanes():

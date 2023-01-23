@@ -1,17 +1,23 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 import numpy as np
 import pickle
 
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 
+# import tensorflow as tf
+# print("Num of GPUs available: ", len(tf.test.gpu_device_name()))
+# from tensorflow import keras
+
 # Import necessary items from Keras
+# import keras
 from keras.models import Sequential
 from keras.layers import Dropout, UpSampling2D
 from keras.layers import Conv2DTranspose, Conv2D, MaxPooling2D, BatchNormalization
 from keras.preprocessing.image import ImageDataGenerator
-
+# print(tf.__version__)
+# print(keras.__version__)
 
 def create_model(input_shape, pool_size):
     """ a fully convolutional neural network for detecting middle line.
@@ -144,7 +150,7 @@ def main():
     X_train, X_val, y_train, y_val = train_test_split(train_images, labels, test_size=0.1)
 
     # # Batch size, epochs and pool size below are all paramaters to fiddle with for optimization
-    batch_size = 128
+    batch_size = 32
     epochs = 10
     pool_size = (2, 2)
     input_shape = X_train.shape[1:]
